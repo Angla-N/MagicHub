@@ -1,0 +1,17 @@
+{
+  "name": "magichub-server",
+  "version": "0.1.0",
+  "description": "MagicHub 后端 · V0.1 极简连通版（WebSocket）",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
