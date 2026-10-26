@@ -5,82 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MagicHub · WebSocket 连通演示</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237C3AED'/%3E%3Cpath d='M20 18l12 28 12-28' stroke='%23EDE9FE' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/theme.css">
+<link rel="stylesheet" href="css/chat.css">
 <style>
-:root{
-  --bg:#1E1E1E; --surface:#252526; --surface-2:#2A2D2E; --border:#3C3C3C;
-  --primary:#7C3AED; --primary-strong:#8B5CF6; --accent:#A855F7; --accent-soft:#C4B5FD;
-  --text:#E8E8E8; --text-2:#9D9D9D; --text-3:#6E6E6E;
-  --grad:linear-gradient(135deg,#7C3AED 0%,#A855F7 100%);
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
-  background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column;
-}
-::selection{background:rgba(124,58,237,.4);color:#fff}
-
-/* ===== 顶栏 ===== */
-.topbar{
-  display:flex;align-items:center;gap:12px;padding:12px 16px;
-  background:var(--surface);border-bottom:1px solid var(--border);flex:none;
-}
-.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px}
-.logo-badge{width:28px;height:28px;border-radius:8px;background:var(--grad);display:grid;place-items:center;font-size:14px;color:#fff;box-shadow:0 4px 12px rgba(124,58,237,.45)}
-.status{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);
-  background:var(--surface-2);border:1px solid var(--border);padding:6px 12px;border-radius:999px}
-.status i{width:8px;height:8px;border-radius:50%;background:var(--text-3);transition:.25s}
-.status.on{color:var(--accent-soft)}
-.status.on i{background:var(--accent);box-shadow:0 0 9px rgba(168,85,247,.9);animation:pulse 1.6s infinite}
-.status.err i{background:#E05C8A}
-@keyframes pulse{50%{opacity:.45}}
-
-/* ===== 消息区 ===== */
-.msg-area{flex:1;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:12px}
-.system{align-self:center;font-size:11px;color:var(--text-2);background:rgba(124,58,237,.14);
-  border:1px solid rgba(124,58,237,.35);padding:5px 14px;border-radius:999px;max-width:92%;text-align:center}
-.msg{max-width:78%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.55;animation:pop .25s ease both;word-break:break-word}
-@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.msg.mine{align-self:flex-end;background:var(--grad);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 14px rgba(124,58,237,.35)}
-.msg.theirs{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);border-top-left-radius:4px}
-.msg .who{display:block;font-size:10px;color:var(--text-3);margin-bottom:3px}
-.msg.mine .who{color:rgba(255,255,255,.75)}
-.empty-tip{align-self:center;margin:auto 0;color:var(--text-3);font-size:12px;text-align:center;line-height:2}
-.empty-tip b{color:var(--text-2)}
-
-/* ===== 输入区 ===== */
-.input-bar{display:flex;align-items:flex-end;gap:10px;padding:12px 14px;background:var(--surface);border-top:1px solid var(--border);flex:none}
-.input-bar input{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;
-  padding:11px 14px;color:var(--text);font-size:16px;font-family:inherit;outline:none;transition:.2s}
-.input-bar input::placeholder{color:var(--text-3)}
-.input-bar input:focus{border-color:var(--primary-strong);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
-.send{height:42px;padding:0 22px;border-radius:12px;background:var(--grad);color:#fff;font-size:13px;font-weight:700;
-  box-shadow:0 6px 16px rgba(124,58,237,.38);transition:.2s;cursor:pointer;border:none;font-family:inherit}
-.send:hover{filter:brightness(1.1);transform:translateY(-1px)}
-.send:disabled{opacity:.45;cursor:not-allowed;transform:none}
-
-/* 提示条 */
-.hint{flex:none;padding:7px 16px;font-size:11px;color:var(--text-3);background:var(--surface);border-top:1px solid var(--border)}
-.hint code{color:var(--accent-soft);font-family:Consolas,Menlo,monospace;font-size:11px}
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  body{height:100vh;display:flex;flex-direction:column}
+  .msg-area{flex:1;min-height:0}
 </style>
 </head>
 <body>
 
 <header class="topbar">
   <div class="logo"><span class="logo-badge">M</span>MagicHub</div>
+  <span id="userChip" class="tag" style="display:none"></span>
   <div class="status" id="status"><i></i><span id="statusText">未连接</span></div>
 </header>
 
 <div class="msg-area" id="msgArea">
-  <div class="empty-tip">启动后端后本页会自动连接<br><b>npm start（apps/server）</b><br>输入任意文字并发送，广播消息会原样回显</div>
+  <div class="empty" id="emptyTip">
+    <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
+    <span>启动后端后本页会自动连接（<b style="color:var(--text-2)">apps/server · npm start</b>）<br>输入任意文字并发送，广播消息会原样回显</span>
+  </div>
 </div>
 
 <div class="input-bar">
-  <input id="input" placeholder="输入消息…" maxlength="500" disabled>
+  <input class="input" id="input" placeholder="输入消息…" maxlength="500" disabled>
   <button class="send" id="sendBtn" disabled>发送</button>
 </div>
 
-<div class="hint">WebSocket 地址：<code id="wsUrl">ws://localhost:3000</code> · 断线后每 3 秒自动重连</div>
+<div class="note-bar">WebSocket 地址：<code id="wsUrl">ws://localhost:3000</code> · 断线后每 3 秒自动重连</div>
 
 <script>
 (function () {
@@ -90,7 +42,22 @@ body{
   const msgArea = document.getElementById("msgArea");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("sendBtn");
+  const emptyTip = document.getElementById("emptyTip");
   document.getElementById("wsUrl").textContent = WS_URL;
+
+  // 当前登录用户（登录页写入 localStorage）
+  const user = localStorage.getItem("magichub_user");
+  const userChip = document.getElementById("userChip");
+  if (user) {
+    userChip.style.display = "inline-flex";
+    userChip.textContent = "@" + user;
+    userChip.title = "点击退出登录";
+    userChip.style.cursor = "pointer";
+    userChip.addEventListener("click", function () {
+      localStorage.removeItem("magichub_user");
+      location.href = "login.html";
+    });
+  }
 
   let ws = null;
   let retryTimer = null;
@@ -103,31 +70,24 @@ body{
   }
 
   function addSystem(text) {
+    emptyTip.style.display = "none";
     const div = document.createElement("div");
     div.className = "system";
     div.textContent = text;
     msgArea.appendChild(div);
-    hideEmptyTip();
-  }
-
-  function addMessage(text, mine) {
-    const div = document.createElement("div");
-    div.className = "msg " + (mine ? "mine" : "theirs");
-    if (!mine) {
-      const who = document.createElement("span");
-      who.className = "who";
-      who.textContent = "对端";
-      div.appendChild(who);
-    }
-    div.appendChild(document.createTextNode(text));
-    msgArea.appendChild(div);
-    hideEmptyTip();
     msgArea.scrollTop = msgArea.scrollHeight;
   }
 
-  function hideEmptyTip() {
-    const tip = msgArea.querySelector(".empty-tip");
-    if (tip) tip.remove();
+  function addMessage(text, mine) {
+    emptyTip.style.display = "none";
+    const div = document.createElement("div");
+    div.className = "msg " + (mine ? "out" : "in");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    div.appendChild(bubble);
+    msgArea.appendChild(div);
+    msgArea.scrollTop = msgArea.scrollHeight;
   }
 
   function connect() {
@@ -149,8 +109,6 @@ body{
       if (frame.type === "hello") {
         addSystem("服务端握手成功：" + (frame.msg || ""));
       } else if (frame.type === "broadcast") {
-        // 自己发的消息客户端本地已上屏，这里仅回显"对端"视角；为避免重复，
-        // 广播中不含发送者身份（极简版），一律按对端消息显示。
         addMessage(String(frame.text), false);
       }
     };

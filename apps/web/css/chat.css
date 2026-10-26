@@ -1,0 +1,99 @@
+/* ============================================================
+   MagicHub · chat.css —— 聊天组件
+   与聊天场景相关的组件：三栏布局 / 导航栏 / 会话列表 /
+   消息气泡 / 输入条 / 发送框 / 连接状态等
+   依赖 theme.css 中的设计 Token（--primary / --grad / --surface 等）
+   ============================================================ */
+
+/* ---------- 1. 应用外壳（三栏布局） ---------- */
+.app-shell{
+  display:grid;grid-template-columns:56px 1fr;height:520px;border-radius:18px;
+  border:1px solid var(--border);background:var(--bg-soft);box-shadow:var(--shadow);overflow:hidden;
+}
+@media(min-width:820px){.app-shell{grid-template-columns:64px 272px 1fr}}
+
+/* ---------- 2. 导航栏 ---------- */
+.rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;background:var(--bg-soft);border-right:1px solid var(--border)}
+.rail .logo-badge{width:34px;height:34px;margin-bottom:10px}
+.rail .rail-item{position:relative;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:var(--text-3);transition:.2s}
+.rail .rail-item:hover{color:var(--accent-soft);background:rgba(124,58,237,.14)}
+.rail .rail-item.on{color:var(--accent-soft);background:rgba(124,58,237,.2)}
+.rail .rail-item.on::before{content:"";position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:3px;height:18px;border-radius:3px;background:var(--accent)}
+.rail .rail-sep{width:24px;height:1px;background:var(--border);margin:6px 0}
+
+/* ---------- 3. 会话列表 ---------- */
+.list-pane{display:none;flex-direction:column;min-width:0;border-right:1px solid var(--border);background:var(--bg-soft)}
+@media(min-width:820px){.list-pane{display:flex}}
+.list-head{padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px}
+.list-head h3{font-size:14px;font-weight:800}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:8px 12px}
+.search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--text);font-size:13px}
+.search input::placeholder{color:var(--text-3)}
+.list{padding:6px 8px 14px;overflow:auto}
+.chat-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;transition:.18s;cursor:pointer}
+.chat-item:hover,.chat-item.on{background:var(--surface-2)}
+.chat-item .c-main{flex:1;min-width:0}
+.c-row{display:flex;align-items:center;gap:6px}
+.c-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-time{margin-left:auto;font-size:10px;color:var(--text-3);flex:none}
+.c-prev{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 头像 */
+.avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:14px;font-weight:700;flex:none}
+
+/* 未读徽标 */
+.badge{background:var(--grad);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;box-shadow:0 2px 8px rgba(124,58,237,.55)}
+.unread{background:var(--grad);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;box-shadow:0 2px 8px rgba(124,58,237,.5)}
+
+/* ---------- 4. 聊天主区 ---------- */
+.chat-pane{display:flex;flex-direction:column;min-width:0;background:var(--bg-soft)}
+.chat-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
+.chat-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(168,85,247,.8)}
+.chat-head h4{font-size:14px;font-weight:700}
+.chat-head .tools{margin-left:auto;display:flex;gap:4px}
+
+/* 消息区 */
+.msg-area{flex:1;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+.date-pill{align-self:center;font-size:10px;color:var(--text-3);background:var(--surface);padding:3px 12px;border-radius:999px;border:1px solid var(--border)}
+.msg{display:flex;gap:8px;max-width:82%;animation:pop .3s ease both}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg.in{align-self:flex-start}
+.msg.out{align-self:flex-end}
+.bubble{padding:9px 13px;border-radius:14px;font-size:13px;line-height:1.55;word-break:break-word}
+.msg.in .bubble{background:var(--surface-2);border:1px solid var(--border);border-top-left-radius:4px}
+.msg.out .bubble{background:var(--grad);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 14px rgba(124,58,237,.35)}
+.msg-meta{font-size:10px;color:var(--text-3);margin-top:4px}
+.msg.out .msg-meta{text-align:right}
+
+/* 迷你气泡（组件演示用） */
+.bubble-sm{padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.5;max-width:260px}
+.bubble-sm.in{background:var(--surface-2);border:1px solid var(--border);border-top-left-radius:3px}
+.bubble-sm.out{background:var(--grad);color:#fff;border-top-right-radius:3px;align-self:flex-end}
+
+/* 系统提示 / 在线状态 */
+.system,.notice{align-self:center;font-size:11px;color:var(--text-2);background:rgba(124,58,237,.14);border:1px solid rgba(124,58,237,.35);padding:5px 14px;border-radius:999px;max-width:92%;text-align:center}
+.dot-status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)}
+.dot-status i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(168,85,247,.9)}
+
+/* 正在输入 */
+.typing{display:inline-flex;gap:4px;align-items:center;background:var(--surface-2);border:1px solid var(--border);padding:10px 14px;border-radius:14px;border-top-left-radius:4px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--accent-soft);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+/* ---------- 5. 输入条 / 发送 ---------- */
+.input-bar{display:flex;align-items:flex-end;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--bg-soft)}
+.input-bar textarea{flex:1;min-width:0;resize:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:var(--text);font-size:16px;font-family:inherit;outline:none;height:42px;max-height:110px;transition:.2s}
+.input-bar textarea:focus{border-color:var(--primary-strong);box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+.input-bar .send{height:42px;padding:0 20px;border-radius:12px;background:var(--grad);color:#fff;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(124,58,237,.4);transition:.2s;flex:none}
+.send:hover{filter:brightness(1.1);transform:translateY(-1px)}
+
+/* ---------- 6. 连接状态（顶栏胶囊） ---------- */
+.status{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);
+  background:var(--surface-2);border:1px solid var(--border);padding:6px 12px;border-radius:999px}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--text-3);transition:.25s}
+.status.on{color:var(--accent-soft)}
+.status.on i{background:var(--accent);box-shadow:0 0 9px rgba(168,85,247,.9);animation:pulse 1.6s infinite}
+.status.err{color:var(--danger)}
+.status.err i{background:var(--danger)}
+@keyframes pulse{50%{opacity:.45}}

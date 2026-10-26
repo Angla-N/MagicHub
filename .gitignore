@@ -10,6 +10,9 @@ out/
 build/
 *.tsbuildinfo
 
+# —— 运行时数据（启动时自动重建，含演示账号）——
+apps/server/data/
+
 # —— 环境与密钥 ——
 .env
 .env.*
@@ -20,6 +23,7 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+~$*
 
 # —— 日志 ——
 *.log

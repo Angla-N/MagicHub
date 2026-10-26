@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MagicHub · 登录</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237C3AED'/%3E%3Cpath d='M20 18l12 28 12-28' stroke='%23EDE9FE' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/theme.css">
+</head>
+<body>
+<div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="logo"><span class="logo-badge">M</span>MagicHub</div>
+    <p class="subtitle">登录或注册，开始你的轻量聊天</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab on" id="tabLogin" type="button">登录</button>
+      <button class="tab" id="tabRegister" type="button">注册</button>
+    </div>
+
+    <form id="authForm" novalidate>
+      <div class="field" style="margin-top:18px">
+        <label for="username">账号</label>
+        <input class="input" id="username" name="username" autocomplete="username"
+               placeholder="3-24 位字母、数字或下划线" maxlength="24">
+      </div>
+      <div class="field">
+        <label for="password">密码</label>
+        <input class="input" id="password" name="password" type="password" autocomplete="current-password"
+               placeholder="至少 6 位" maxlength="64">
+      </div>
+      <div class="auth-error" id="authError"></div>
+      <button class="btn btn-primary" id="submitBtn" type="submit">登 录</button>
+    </form>
+
+    <p class="auth-switch" id="switchHint">
+      还没有账号？<button type="button" id="switchBtn">去注册</button>
+    </p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var mode = "login"; // login | register
+  var form = document.getElementById("authForm");
+  var usernameEl = document.getElementById("username");
+  var passwordEl = document.getElementById("password");
+  var errorEl = document.getElementById("authError");
+  var submitBtn = document.getElementById("submitBtn");
+  var tabLogin = document.getElementById("tabLogin");
+  var tabRegister = document.getElementById("tabRegister");
+  var switchBtn = document.getElementById("switchBtn");
+  var switchHint = document.getElementById("switchHint");
+
+  function setMode(m) {
+    mode = m;
+    tabLogin.classList.toggle("on", m === "login");
+    tabRegister.classList.toggle("on", m === "register");
+    submitBtn.textContent = m === "login" ? "登 录" : "注 册";
+    switchHint.innerHTML = m === "login"
+      ? '还没有账号？<button type="button" id="switchBtn2">去注册</button>'
+      : '已有账号？<button type="button" id="switchBtn2">去登录</button>';
+    document.getElementById("switchBtn2").addEventListener("click", function () {
+      setMode(m === "login" ? "register" : "login");
+    });
+    errorEl.textContent = "";
+  }
+
+  tabLogin.addEventListener("click", function () { setMode("login"); });
+  tabRegister.addEventListener("click", function () { setMode("register"); });
+  switchBtn.addEventListener("click", function () { setMode(mode === "login" ? "register" : "login"); });
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var username = usernameEl.value.trim();
+    var password = passwordEl.value;
+
+    if (!/^[\w-]{3,24}$/.test(username)) {
+      showError("账号需为 3-24 位字母、数字、下划线或短横线");
+      return;
+    }
+    if (password.length < 6) {
+      showError("密码至少 6 位");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = mode === "login" ? "登录中…" : "注册中…";
+
+    fetch(mode === "login" ? "/api/login" : "/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username, password: password })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          if (mode === "register") {
+            // 注册成功后切回登录态，提示去登录
+            setMode("login");
+            usernameEl.value = username;
+            passwordEl.value = "";
+            showError("");
+            switchHint.innerHTML = "注册成功，请登录";
+            return;
+          }
+          localStorage.setItem("magichub_user", username);
+          location.href = "index.html";
+        } else {
+          showError((data.error && data.error.message) || "操作失败，请重试");
+        }
+        submitBtn.disabled = false;
+        submitBtn.textContent = mode === "login" ? "登 录" : "注 册";
+      })
+      .catch(function () {
+        showError("无法连接服务器，请先启动后端（apps/server · npm start）");
+        submitBtn.disabled = false;
+        submitBtn.textContent = mode === "login" ? "登 录" : "注 册";
+      });
+  });
+
+  // 若已登录，直接进入聊天页
+  if (localStorage.getItem("magichub_user")) {
+    location.href = "index.html";
+  }
+})();
+</script>
+</body>
+</html>
