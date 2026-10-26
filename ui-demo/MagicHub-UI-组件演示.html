@@ -7,12 +7,12 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237C3AED'/%3E%3Cpath d='M20 18l12 28 12-28' stroke='%23EDE9FE' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#0A0A12; --bg-soft:#0F0D1C; --surface:#171526; --surface-2:#1E1A30;
-  --border:#2A2342; --primary:#7C3AED; --primary-strong:#8B5CF6; --accent:#A855F7;
-  --accent-soft:#C4B5FD; --text:#EDE9FE; --text-2:#A5A0C0; --text-3:#6C6399;
-  --grad:linear-gradient(135deg,#7C3AED 0%,#A855F7 100%);
+  --bg:#1E1E1E; --bg-soft:#181818; --surface:#252526; --surface-2:#2A2D2E;
+  --border:#3C3C3C; --primary:#007ACC; --primary-strong:#1C97EA; --accent:#0A84FF;
+  --accent-soft:#7DC8F7; --text:#E8E8E8; --text-2:#9D9D9D; --text-3:#6E6E6E;
+  --grad:linear-gradient(135deg,#007ACC 0%,#0A84FF 100%);
   --radius:14px; --radius-sm:9px;
-  --shadow:0 18px 48px rgba(0,0,0,.45);
+  --shadow:0 18px 48px rgba(0,0,0,.55);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -21,16 +21,16 @@ body{
   background:var(--bg); color:var(--text); line-height:1.6;
   min-width:320px; overflow-x:hidden;
 }
-::selection{background:rgba(124,58,237,.45);color:#fff}
+::selection{background:rgba(0,122,204,.4);color:#fff}
 a{color:var(--accent-soft);text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 svg{display:block}
-/* ===== 背景氛围 ===== */
+/* ===== 背景氛围（纯深黑，仅无色微光） ===== */
 .bg-orbs{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-.bg-orbs i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.55}
-.bg-orbs i:nth-child(1){width:520px;height:520px;left:-160px;top:-180px;background:radial-gradient(circle,#4C1D95 0%,transparent 62%)}
-.bg-orbs i:nth-child(2){width:460px;height:460px;right:-140px;top:6%;background:radial-gradient(circle,#6D28D9 0%,transparent 62%);animation:drift 22s ease-in-out infinite alternate}
-.bg-orbs i:nth-child(3){width:520px;height:520px;left:30%;bottom:-260px;background:radial-gradient(circle,#7C3AED 0%,transparent 60%);opacity:.35;animation:drift 28s ease-in-out infinite alternate-reverse}
+.bg-orbs i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5}
+.bg-orbs i:nth-child(1){width:520px;height:520px;left:-160px;top:-180px;background:radial-gradient(circle,#2A2A2A 0%,transparent 62%)}
+.bg-orbs i:nth-child(2){width:460px;height:460px;right:-140px;top:6%;background:radial-gradient(circle,#333 0%,transparent 62%);animation:drift 22s ease-in-out infinite alternate}
+.bg-orbs i:nth-child(3){width:520px;height:520px;left:30%;bottom:-260px;background:radial-gradient(circle,#3A3A3A 0%,transparent 60%);opacity:.3;animation:drift 28s ease-in-out infinite alternate-reverse}
 @keyframes drift{from{transform:translateY(0) scale(1)}to{transform:translateY(-46px) scale(1.08)}}
 /* ===== 顶栏 ===== */
 .topbar{
@@ -39,12 +39,12 @@ svg{display:block}
   border-bottom:1px solid var(--border);
 }
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.4px}
-.logo-badge{width:32px;height:32px;border-radius:9px;background:var(--grad);display:grid;place-items:center;font-size:16px;color:#fff;box-shadow:0 4px 14px rgba(124,58,237,.5)}
+.logo-badge{width:32px;height:32px;border-radius:9px;background:var(--grad);display:grid;place-items:center;font-size:16px;color:#fff;box-shadow:0 4px 14px rgba(0,122,204,.45)}
 .topbar .tag{margin-left:auto;font-size:12px;color:var(--text-3);white-space:nowrap}
 @media(max-width:640px){.topbar .tag{display:none}}
 .nav-anchor{display:flex;gap:4px}
 .nav-anchor a{font-size:13px;color:var(--text-2);padding:6px 12px;border-radius:999px;transition:.2s}
-.nav-anchor a:hover,.nav-anchor a.on{color:var(--accent-soft);background:rgba(124,58,237,.16)}
+.nav-anchor a:hover,.nav-anchor a.on{color:var(--accent-soft);background:rgba(0,122,204,.16)}
 /* ===== 容器 ===== */
 .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
 section{padding:64px 0 8px}
@@ -55,7 +55,7 @@ section{padding:64px 0 8px}
 .sec-desc{color:var(--text-3);font-size:13px;margin-top:-18px;margin-bottom:28px}
 /* ===== 概览 hero ===== */
 .hero{padding:56px 0 8px}
-.hero h1{font-size:34px;font-weight:900;letter-spacing:.5px;line-height:1.25;background:linear-gradient(120deg,#fff 10%,var(--accent-soft) 55%,var(--accent) 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1{font-size:34px;font-weight:900;letter-spacing:.5px;line-height:1.25;background:linear-gradient(120deg,#fff 15%,#C9D6E4 60%,#7DC8F7 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p{margin-top:12px;color:var(--text-2);font-size:15px;max-width:640px}
 .hero-stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
 .stat{display:flex;flex-direction:column;gap:2px;padding:14px 22px;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);min-width:140px}
@@ -72,8 +72,8 @@ section{padding:64px 0 8px}
 .rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;background:var(--bg-soft);border-right:1px solid var(--border)}
 .rail .logo-badge{width:34px;height:34px;margin-bottom:10px}
 .rail .rail-item{position:relative;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:var(--text-3);transition:.2s}
-.rail .rail-item:hover{color:var(--accent-soft);background:rgba(124,58,237,.14)}
-.rail .rail-item.on{color:var(--accent-soft);background:rgba(124,58,237,.2)}
+.rail .rail-item:hover{color:var(--accent-soft);background:rgba(0,122,204,.14)}
+.rail .rail-item.on{color:var(--accent-soft);background:rgba(0,122,204,.2)}
 .rail .rail-item.on::before{content:"";position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:3px;height:18px;border-radius:3px;background:var(--accent)}
 .rail .rail-sep{width:24px;height:1px;background:var(--border);margin:6px 0}
 /* 会话列表 */
@@ -93,15 +93,15 @@ section{padding:64px 0 8px}
 .c-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-time{margin-left:auto;font-size:10px;color:var(--text-3);flex:none}
 .c-prev{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.badge{background:var(--grad);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;box-shadow:0 2px 8px rgba(124,58,237,.55)}
+.badge{background:var(--grad);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;box-shadow:0 2px 8px rgba(0,122,204,.55)}
 /* 聊天主区 */
 .chat-pane{display:flex;flex-direction:column;min-width:0;background:var(--bg-soft)}
 .chat-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
-.chat-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(168,85,247,.8)}
+.chat-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(0,122,204,.8)}
 .chat-head h4{font-size:14px;font-weight:700}
 .chat-head .tools{margin-left:auto;display:flex;gap:4px}
 .icon-btn{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--text-2);transition:.18s}
-.icon-btn:hover{color:var(--accent-soft);background:rgba(124,58,237,.16)}
+.icon-btn:hover{color:var(--accent-soft);background:rgba(0,122,204,.16)}
 .msg-area{flex:1;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
 .date-pill{align-self:center;font-size:10px;color:var(--text-3);background:var(--surface);padding:3px 12px;border-radius:999px;border:1px solid var(--border)}
 .msg{display:flex;gap:8px;max-width:82%;animation:pop .3s ease both}
@@ -110,7 +110,7 @@ section{padding:64px 0 8px}
 .msg.out{align-self:flex-end}
 .bubble{padding:9px 13px;border-radius:14px;font-size:13px;line-height:1.55}
 .msg.in .bubble{background:var(--surface-2);border:1px solid var(--border);border-top-left-radius:4px}
-.msg.out .bubble{background:var(--grad);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 14px rgba(124,58,237,.35)}
+.msg.out .bubble{background:var(--grad);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 14px rgba(0,122,204,.35)}
 .msg-meta{font-size:10px;color:var(--text-3);margin-top:4px}
 .msg.out .msg-meta{text-align:right}
 .typing{display:inline-flex;gap:4px;align-items:center;background:var(--surface-2);border:1px solid var(--border);padding:10px 14px;border-radius:14px;border-top-left-radius:4px}
@@ -119,8 +119,8 @@ section{padding:64px 0 8px}
 @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
 .input-bar{display:flex;align-items:flex-end;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--bg-soft)}
 .input-bar textarea{flex:1;min-width:0;resize:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;height:42px;max-height:110px;transition:.2s}
-.input-bar textarea:focus{border-color:var(--primary-strong);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
-.send{height:42px;padding:0 20px;border-radius:12px;background:var(--grad);color:#fff;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(124,58,237,.4);transition:.2s}
+.input-bar textarea:focus{border-color:var(--primary-strong);box-shadow:0 0 0 3px rgba(0,122,204,.2)}
+.send{height:42px;padding:0 20px;border-radius:12px;background:var(--grad);color:#fff;font-size:13px;font-weight:700;box-shadow:0 6px 18px rgba(0,122,204,.4);transition:.2s}
 .send:hover{filter:brightness(1.1);transform:translateY(-1px)}
 /* ===== 组件库 ===== */
 .comp-grid{display:grid;grid-template-columns:1fr;gap:14px}
@@ -133,19 +133,19 @@ section{padding:64px 0 8px}
 .comp-row.col{flex-direction:column;align-items:stretch;gap:12px}
 /* 按钮 */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600;transition:.18s}
-.btn-primary{background:var(--grad);color:#fff;box-shadow:0 6px 16px rgba(124,58,237,.38)}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 6px 16px rgba(0,122,204,.38)}
 .btn-primary:hover{filter:brightness(1.12);transform:translateY(-1px)}
-.btn-secondary{background:rgba(124,58,237,.16);color:var(--accent-soft);border:1px solid rgba(124,58,237,.45)}
-.btn-secondary:hover{background:rgba(124,58,237,.26)}
+.btn-secondary{background:rgba(0,122,204,.16);color:var(--accent-soft);border:1px solid rgba(0,122,204,.45)}
+.btn-secondary:hover{background:rgba(0,122,204,.26)}
 .btn-ghost{color:var(--text-2);border:1px solid var(--border)}
 .btn-ghost:hover{color:var(--text);border-color:var(--primary-strong)}
-.btn-icon{width:36px;height:36px;border-radius:10px;background:rgba(124,58,237,.16);color:var(--accent-soft);display:grid;place-items:center}
-.btn-icon:hover{background:rgba(124,58,237,.3)}
+.btn-icon{width:36px;height:36px;border-radius:10px;background:rgba(0,122,204,.16);color:var(--accent-soft);display:grid;place-items:center}
+.btn-icon:hover{background:rgba(0,122,204,.3)}
 /* 输入 */
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:11px;color:var(--text-3)}
 .input,select{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:.2s;width:100%}
-.input:focus{border-color:var(--primary-strong);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
+.input:focus{border-color:var(--primary-strong);box-shadow:0 0 0 3px rgba(0,122,204,.2)}
 .input.err{border-color:#E05C8A}
 .hint{font-size:11px;color:var(--text-3)}
 .hint.err{color:#E05C8A}
@@ -164,13 +164,13 @@ section{padding:64px 0 8px}
 .bubble-sm{padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.5;max-width:260px}
 .bubble-sm.in{background:var(--surface-2);border:1px solid var(--border);border-top-left-radius:3px}
 .bubble-sm.out{background:var(--grad);color:#fff;border-top-right-radius:3px;align-self:flex-end}
-.notice{align-self:center;font-size:11px;color:var(--text-2);background:rgba(124,58,237,.14);border:1px solid rgba(124,58,237,.35);padding:5px 14px;border-radius:999px}
-.unread{background:var(--grad);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;box-shadow:0 2px 8px rgba(124,58,237,.5)}
+.notice{align-self:center;font-size:11px;color:var(--text-2);background:rgba(0,122,204,.14);border:1px solid rgba(0,122,204,.35);padding:5px 14px;border-radius:999px}
+.unread{background:var(--grad);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;box-shadow:0 2px 8px rgba(0,122,204,.5)}
 .dot-status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)}
-.dot-status i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(168,85,247,.9)}
+.dot-status i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(0,122,204,.9)}
 /* 反馈 */
 .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-2)}
-.tag.p{background:rgba(124,58,237,.16);color:var(--accent-soft);border-color:rgba(124,58,237,.45)}
+.tag.p{background:rgba(0,122,204,.16);color:var(--accent-soft);border-color:rgba(0,122,204,.45)}
 .skeleton{display:flex;gap:10px;align-items:center}
 .sk{background:linear-gradient(90deg,var(--surface-2) 25%,rgba(255,255,255,.06) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:sk 1.4s infinite;border-radius:8px}
 @keyframes sk{to{background-position:-200% 0}}
@@ -183,7 +183,7 @@ section{padding:64px 0 8px}
 /* 标签页 */
 .tabs{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:11px}
 .tab{flex:1;text-align:center;font-size:12px;color:var(--text-3);padding:7px 6px;border-radius:8px;transition:.18s;cursor:pointer}
-.tab.on{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 4px 12px rgba(124,58,237,.35)}
+.tab.on{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 4px 12px rgba(0,122,204,.35)}
 /* 弹窗 */
 .modal-sample{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow);max-width:320px}
 .modal-sample h6{font-size:14px;font-weight:700;margin-bottom:8px}
@@ -192,7 +192,7 @@ section{padding:64px 0 8px}
 /* 下拉菜单 */
 .menu-sample{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:6px;width:100%}
 .menu-sample .mi{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;font-size:12px;color:var(--text-2);transition:.15s;width:100%;text-align:left}
-.menu-sample .mi:hover{background:rgba(124,58,237,.16);color:var(--accent-soft)}
+.menu-sample .mi:hover{background:rgba(0,122,204,.16);color:var(--accent-soft)}
 .menu-sample .sep{height:1px;background:var(--border);margin:4px 2px}
 /* 工具提示 */
 .tip-row{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
@@ -226,7 +226,7 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
     <a href="#components">组件库</a>
     <a href="#colors">色彩</a>
   </nav>
-  <span class="tag">UI 组件演示 · V0.1 · 深紫暗色主题</span>
+  <span class="tag">UI 组件演示 · V0.1 · 深黑主题</span>
 </header>
 
 <div class="wrap">
@@ -234,7 +234,7 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
   <section id="overview">
     <div class="hero">
       <h1>MagicHub 界面组件演示</h1>
-      <p>一套面向聊天软件的深紫暗色设计体系：深黑为底、紫色点睛。本页按「应用框架 → 组件库 → 设计 Token」的顺序，完整呈现导航、会话、消息、输入等核心组件。</p>
+      <p>一套面向聊天软件的深黑主题设计体系：纯黑为底、蓝色点睛（色深参考 VS Code）。本页按「应用框架 → 组件库 → 设计 Token」的顺序，完整呈现导航、会话、消息、输入等核心组件。</p>
       <div class="hero-stats">
         <div class="stat"><b>5</b><span>核心色彩 Token</span></div>
         <div class="stat"><b>5 类</b><span>导航与列表组件</span></div>
@@ -270,10 +270,10 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
         </div>
         <div class="list">
           <div class="chat-item on" data-toast="已打开「产品设计群」"><span class="avatar" style="background:var(--grad)">群</span><div class="c-main"><div class="c-row"><span class="c-name">产品设计群</span><span class="c-time">09:41</span></div><div class="c-row"><span class="c-prev">小紫：新版 UI 已上传</span><span class="badge">3</span></div></div></div>
-          <div class="chat-item" data-toast="已打开「周工」"><span class="avatar" style="background:linear-gradient(135deg,#4C1D95,#7C3AED)">周</span><div class="c-main"><div class="c-row"><span class="c-name">周工</span><span class="c-time">昨天</span></div><div class="c-row"><span class="c-prev">收到，晚点回复</span></div></div></div>
-          <div class="chat-item" data-toast="已打开「MagicHub 官方」"><span class="avatar" style="background:linear-gradient(135deg,#1E1A30,#7C3AED)">官</span><div class="c-main"><div class="c-row"><span class="c-name">MagicHub 官方</span><span class="c-time">周二</span></div><div class="c-row"><span class="c-prev">欢迎使用 MagicHub</span></div></div></div>
-          <div class="chat-item" data-toast="已打开「林一」"><span class="avatar" style="background:linear-gradient(135deg,#6D28D9,#A855F7)">林</span><div class="c-main"><div class="c-row"><span class="c-name">林一</span><span class="c-time">周一</span></div><div class="c-row"><span class="c-prev">会议纪要发你邮箱了</span></div></div></div>
-          <div class="chat-item" data-toast="已打开「Rust 扩展讨论组」"><span class="avatar" style="background:linear-gradient(135deg,#4C1D95,#8B5CF6)">码</span><div class="c-main"><div class="c-row"><span class="c-name">Rust 扩展讨论组</span><span class="c-time">周日</span></div><div class="c-row"><span class="c-prev">N-API 基准测试结果</span><span class="badge">12</span></div></div></div>
+          <div class="chat-item" data-toast="已打开「周工」"><span class="avatar" style="background:linear-gradient(135deg,#002C4D,#007ACC)">周</span><div class="c-main"><div class="c-row"><span class="c-name">周工</span><span class="c-time">昨天</span></div><div class="c-row"><span class="c-prev">收到，晚点回复</span></div></div></div>
+          <div class="chat-item" data-toast="已打开「MagicHub 官方」"><span class="avatar" style="background:linear-gradient(135deg,#2A2D2E,#007ACC)">官</span><div class="c-main"><div class="c-row"><span class="c-name">MagicHub 官方</span><span class="c-time">周二</span></div><div class="c-row"><span class="c-prev">欢迎使用 MagicHub</span></div></div></div>
+          <div class="chat-item" data-toast="已打开「林一」"><span class="avatar" style="background:linear-gradient(135deg,#005FB8,#0A84FF)">林</span><div class="c-main"><div class="c-row"><span class="c-name">林一</span><span class="c-time">周一</span></div><div class="c-row"><span class="c-prev">会议纪要发你邮箱了</span></div></div></div>
+          <div class="chat-item" data-toast="已打开「Rust 扩展讨论组」"><span class="avatar" style="background:linear-gradient(135deg,#00335A,#005FB8)">码</span><div class="c-main"><div class="c-row"><span class="c-name">Rust 扩展讨论组</span><span class="c-time">周日</span></div><div class="c-row"><span class="c-prev">N-API 基准测试结果</span><span class="badge">12</span></div></div></div>
         </div>
       </div>
 
@@ -291,7 +291,7 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
         <div class="msg-area">
           <span class="date-pill">今天 09:20</span>
           <div class="msg in"><span class="avatar" style="background:var(--grad);width:32px;height:32px;font-size:12px">群</span><div><div class="bubble">新版聊天界面已经更新完成，大家可以去看看效果。</div><div class="msg-meta">小紫 · 09:21</div></div></div>
-          <div class="msg in"><span class="avatar" style="background:linear-gradient(135deg,#4C1D95,#7C3AED);width:32px;height:32px;font-size:12px">周</span><div><div class="bubble">收到，我这就去看。</div><div class="msg-meta">周工 · 09:24</div></div></div>
+          <div class="msg in"><span class="avatar" style="background:linear-gradient(135deg,#002C4D,#007ACC);width:32px;height:32px;font-size:12px">周</span><div><div class="bubble">收到，我这就去看。</div><div class="msg-meta">周工 · 09:24</div></div></div>
           <div class="msg out"><div><div class="bubble">好的，看完在群里反馈一下</div><div class="msg-meta">我 · 09:26 · 已读</div></div></div>
           <span class="date-pill">今天 09:30</span>
           <div class="msg in"><span class="avatar" style="background:var(--grad);width:32px;height:32px;font-size:12px">群</span><div><div class="bubble">深紫主题的观感如何？</div></div></div>
@@ -407,7 +407,7 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
           <button class="btn btn-ghost" data-toast="操作失败：网络异常，请重试">触发失败</button>
         </div>
         <div class="toast-wrap" style="margin-top:14px">
-          <div class="toast"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#A855F7" stroke-width="2.2" stroke-linecap="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>设置已保存</div>
+          <div class="toast"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#0A84FF" stroke-width="2.2" stroke-linecap="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>设置已保存</div>
           <div class="toast" style="border-left-color:#E05C8A"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#E05C8A" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>网络异常，请重试</div>
         </div>
       </div>
@@ -455,20 +455,20 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
       <h2 class="sec-title">色彩 Token</h2>
       <span class="sec-line"></span>
     </div>
-    <p class="sec-desc">深紫暗色体系的核心五色，由它们派生全部界面状态。</p>
+    <p class="sec-desc">深黑主题的核心色彩，由它们派生全部界面状态。</p>
     <div class="swatches">
-      <div class="sw"><span class="chip" style="background:#0A0A12"></span><b>背景 Base</b><span>#0A0A12</span></div>
-      <div class="sw"><span class="chip" style="background:#171526"></span><b>面板 Surface</b><span>#171526</span></div>
-      <div class="sw"><span class="chip" style="background:var(--grad)"></span><b>主色 Primary</b><span>#7C3AED → #A855F7</span></div>
-      <div class="sw"><span class="chip" style="background:#C4B5FD"></span><b>强调 Accent</b><span>#C4B5FD</span></div>
-      <div class="sw"><span class="chip" style="background:#EDE9FE"></span><b>文本 Text</b><span>#EDE9FE</span></div>
-      <div class="sw"><span class="chip" style="background:#2A2342"></span><b>描边 Border</b><span>#2A2342</span></div>
+      <div class="sw"><span class="chip" style="background:#1E1E1E"></span><b>背景 Base</b><span>#1E1E1E</span></div>
+      <div class="sw"><span class="chip" style="background:#252526"></span><b>面板 Surface</b><span>#252526</span></div>
+      <div class="sw"><span class="chip" style="background:var(--grad)"></span><b>主色 Primary</b><span>#007ACC → #0A84FF</span></div>
+      <div class="sw"><span class="chip" style="background:#7DC8F7"></span><b>强调 Accent</b><span>#7DC8F7</span></div>
+      <div class="sw"><span class="chip" style="background:#E8E8E8"></span><b>文本 Text</b><span>#E8E8E8</span></div>
+      <div class="sw"><span class="chip" style="background:#3C3C3C"></span><b>描边 Border</b><span>#3C3C3C</span></div>
     </div>
   </section>
 </div>
 
 <footer>
-  <span>MagicHub · UI 组件演示 · 深紫暗色主题</span>
+  <span>MagicHub · UI 组件演示 · 深黑主题</span>
   <span class="p">本页为静态演示，交互仅为展示效果</span>
 </footer>
 
