@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#A855F7"/>
+    </linearGradient>
+  </defs>
+  <!-- 紫色渐变圆角底 -->
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="212" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="10"/>
+  <!-- 白色聊天气泡（字形源自 聊天.svg，等比缩放居中） -->
+  <g transform="translate(146 168) scale(0.68)" fill="#FFFFFF">
+    <path d="M0 0h1077.894737v808.421053h-246.191158l-35.031579 215.578947-379.095579-215.578947H0V0z"/>
+    <path d="M269.473684 323.368421h107.789474v161.684211H269.473684zM646.736842 323.368421h107.789474v161.684211h-107.789474z"/>
+  </g>
+</svg>

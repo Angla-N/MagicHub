@@ -4,15 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MagicHub · 登录</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237C3AED'/%3E%3Cpath d='M20 18l12 28 12-28' stroke='%23EDE9FE' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237C3AED'/%3E%3Cpath d='M8 14h48v30H38l-8 12v-12H8z' fill='%23EDE9FE'/%3E%3Ccircle cx='22' cy='29' r='3' fill='%23A855F7'/%3E%3Ccircle cx='42' cy='29' r='3' fill='%23A855F7'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/theme.css">
+<style>
+  /* 页面专属：深紫星云背景 + 深色渐变蒙版（背景图直接使用用户素材，不改动） */
+  body{background:url("assets/cover-bg.jpg") center/cover no-repeat fixed,var(--bg)}
+  .auth-page{position:relative}
+  .auth-page::before{content:"";position:fixed;inset:0;z-index:0;
+    background:linear-gradient(180deg,rgba(14,14,14,.86) 0%,rgba(18,18,18,.5) 52%,rgba(14,14,14,.9) 100%)}
+  .auth-card{position:relative;z-index:1;background:rgba(37,37,38,.74);backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,.08)}
+</style>
 </head>
 <body>
 <div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <div class="auth-page">
   <div class="auth-card">
-    <div class="logo"><span class="logo-badge">M</span>MagicHub</div>
+    <div class="logo"><span class="logo-badge"><svg viewBox="0 0 1077.9 1024" fill="none"><path d="M0 0h1077.9v808.4h-246.2l-35 215.6-379.1-215.6H0V0z" fill="#fff"/><path d="M269.5 323.4h107.8v161.7H269.5zM646.7 323.4h107.8v161.7H646.7z" fill="#fff"/></svg></span>MagicHub</div>
     <p class="subtitle">登录或注册，开始你的轻量聊天</p>
 
     <div class="tabs" role="tablist">

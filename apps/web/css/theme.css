@@ -52,6 +52,7 @@ svg{display:block}
 }
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.4px}
 .logo-badge{width:32px;height:32px;border-radius:9px;background:var(--grad);display:grid;place-items:center;font-size:16px;color:#fff;box-shadow:0 4px 14px rgba(124,58,237,.45)}
+.logo-badge svg{width:58%;height:58%;display:block}
 .topbar .tag{margin-left:auto;font-size:12px;color:var(--text-3);white-space:nowrap}
 @media(max-width:640px){.topbar .tag{display:none}}
 .nav-anchor{display:flex;gap:4px}
