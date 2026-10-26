@@ -1,6 +1,7 @@
 # —— 中间产物（工作目录，不纳入版本控制）——
 .ppt-work/
 ui-demo/_shots/
+apps/web/_shots/
 
 # —— Node ——
 node_modules/
