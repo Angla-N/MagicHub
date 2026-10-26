@@ -27,7 +27,7 @@
 .list-head{padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px}
 .list-head h3{font-size:14px;font-weight:800}
 .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:8px 12px}
-.search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--text);font-size:13px}
+.search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--text);font-size:16px}
 .search input::placeholder{color:var(--text-3)}
 .list{padding:6px 8px 14px;overflow:auto}
 .chat-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;transition:.18s;cursor:pointer}

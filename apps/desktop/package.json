@@ -1,0 +1,16 @@
+{
+  "name": "magichub-desktop",
+  "version": "1.0.0",
+  "description": "MagicHub 桌面端（Electron 壳 + 内置 Node 服务）",
+  "main": "main.js",
+  "author": "MagicHub Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . MagicHub --platform=win32 --arch=x64 --icon=../../brand/icon.ico --out=../../dist --overwrite --ignore=\"^\\.vscode\" --prune=true"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}

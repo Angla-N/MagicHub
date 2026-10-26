@@ -10,7 +10,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, "..", "data");
+// 数据目录：Electron 打包场景下由 MAGICHUB_DATA_DIR 指向用户数据目录（asar 内只读，必须外置）
+const DATA_DIR = process.env.MAGICHUB_DATA_DIR || join(__dirname, "..", "data");
 const USERS_FILE = join(DATA_DIR, "users.json");
 
 /** 预置演示账号，方便首次体验登录 */

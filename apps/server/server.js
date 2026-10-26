@@ -13,7 +13,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,9 +23,65 @@ import { ensureStore, register, login } from "./lib/user-store.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const WEB_ROOT = join(__dirname, "..", "web");
+const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 仓库根 plugins/（Electron 打包场景由主进程注入）
 const MAX_BODY = 64 * 1024; // API 请求体上限 64KB
 
 ensureStore();
+
+/* ================= 插件系统 ================= */
+
+/**
+ * 扫描 plugins/<plugin-id>/manifest.json，返回插件元信息列表。
+ * 插件 = plugins/ 下一个文件夹 + manifest.json，放入即被发现（无需注册）。
+ */
+function listPlugins() {
+  if (!existsSync(PLUGINS_ROOT)) return [];
+  const out = [];
+  for (const dir of readdirSync(PLUGINS_ROOT)) {
+    const p = join(PLUGINS_ROOT, dir);
+    if (!statSync(p).isDirectory()) continue;
+    const mf = join(p, "manifest.json");
+    if (!existsSync(mf)) continue;
+    try {
+      const m = JSON.parse(readFileSync(mf, "utf8"));
+      out.push({
+        id: dir,
+        name: m.name || dir,
+        version: m.version || "0.0.0",
+        description: m.description || "",
+        entry: m.entry || "index.html",
+        icon: m.icon || "",
+      });
+    } catch (err) {
+      console.error(`[plugins] ${dir}/manifest.json 解析失败: ${err.message}`);
+    }
+  }
+  return out;
+}
+
+/** 解析 /plugins/<id>/<path> 为插件目录内的真实文件路径（防路径穿越） */
+function resolvePluginPath(urlPath) {
+  const parts = urlPath.split("/").filter(Boolean); // [id, ...rest]
+  if (parts.length < 1) return null;
+  const [id, ...rest] = parts;
+  const base = join(PLUGINS_ROOT, id);
+  if (!existsSync(base) || !statSync(base).isDirectory()) return null;
+
+  if (rest.length === 0) {
+    // 目录入口：按 manifest 的 entry 解析，默认 index.html
+    let entry = "index.html";
+    const mf = join(base, "manifest.json");
+    if (existsSync(mf)) {
+      try { entry = JSON.parse(readFileSync(mf, "utf8")).entry || "index.html"; } catch { /* 忽略 */ }
+    }
+    rest.push(entry);
+  }
+
+  const normalized = normalize(rest.join("/")).replace(/^([/\\])+/, "");
+  const file = join(base, normalized);
+  if (file !== base && !file.startsWith(base + sep)) return null;
+  return file;
+}
 
 /* ================= HTTP：静态服务 + API ================= */
 
@@ -122,6 +178,16 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, 405, { ok: false, error: { code: "METHOD_NOT_ALLOWED", message: "不支持的方法" } });
     }
 
+    // ---- 插件 API：插件列表 ----
+    if (urlPath === "/api/plugins") {
+      return sendJson(res, 200, { ok: true, data: { plugins: listPlugins() } });
+    }
+
+    // ---- 插件资源：/plugins/<id>/<path> ----
+    if (urlPath.startsWith("/plugins/")) {
+      return await serveStatic(res, resolvePluginPath(urlPath.slice("/plugins/".length)));
+    }
+
     // ---- 静态文件 ----
     const file = resolveStaticPath(urlPath === "/" ? "/index.html" : urlPath);
     return await serveStatic(res, file);
@@ -164,4 +230,6 @@ httpServer.listen(PORT, () => {
   console.log(`MagicHub server listening:`);
   console.log(`  http   -> http://localhost:${PORT}`);
   console.log(`  websocket -> ws://localhost:${PORT}`);
+  console.log(`  web     -> ${WEB_ROOT}`);
+  console.log(`  plugins -> ${PLUGINS_ROOT}`);
 });

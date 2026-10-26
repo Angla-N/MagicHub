@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>关于 MagicHub</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#1E1E1E; --surface:#252526; --surface-2:#2A2D2E; --border:#3C3C3C;
+    --primary:#7C3AED; --accent:#A855F7; --soft:#C4B5FD;
+    --text:#E8E8E8; --text-2:#9D9D9D; --text-3:#6E6E6E;
+  }
+  body{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.65;min-width:320px}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 24px 56px}
+
+  /* 头部 */
+  header{text-align:center;padding:8px 0 34px}
+  .logo{display:inline-flex;align-items:center;gap:14px;font-size:26px;font-weight:900;letter-spacing:.5px}
+  .logo-badge{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#7C3AED,#A855F7);display:grid;place-items:center;box-shadow:0 8px 28px rgba(124,58,237,.5)}
+  .logo-badge svg{width:60%;height:60%}
+  .tagline{color:var(--text-2);font-size:14px;margin-top:14px}
+
+  /* 区块 */
+  section{margin-top:40px}
+  h2{font-size:18px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+  h2::before{content:"";width:18px;height:3px;border-radius:3px;background:linear-gradient(90deg,#7C3AED,#A855F7)}
+  .desc{color:var(--text-3);font-size:13px;margin:-8px 0 18px}
+
+  /* 功能网格 */
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+  .card b{display:block;font-size:14px;color:var(--soft);margin-bottom:6px}
+  .card span{font-size:12px;color:var(--text-2)}
+
+  /* 架构分层 */
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .layer{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:12px 16px}
+  .layer code{flex:none;font-family:Consolas,Menlo,monospace;font-size:12px;color:var(--soft);background:rgba(124,58,237,.14);padding:4px 10px;border-radius:7px}
+  .layer span{font-size:12px;color:var(--text-2)}
+  .layer small{margin-left:auto;flex:none;font-size:11px;color:var(--text-3)}
+
+  /* 进度时间轴 */
+  .timeline{position:relative;padding-left:22px;display:flex;flex-direction:column;gap:16px}
+  .timeline::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,#7C3AED,#A855F7);border-radius:2px}
+  .step{position:relative}
+  .step::before{content:"";position:absolute;left:-21px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(168,85,247,.8)}
+  .step b{display:block;font-size:13px;color:var(--text)}
+  .step span{font-size:12px;color:var(--text-3)}
+
+  /* 插件协议 */
+  .proto{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+  .proto code{display:block;font-family:Consolas,Menlo,monospace;font-size:12px;color:var(--soft);line-height:1.9}
+  .proto p{font-size:12px;color:var(--text-2);margin-top:8px}
+
+  footer{text-align:center;color:var(--text-3);font-size:12px;margin-top:48px;border-top:1px solid var(--border);padding-top:24px}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">
+      <span class="logo-badge">
+        <svg viewBox="0 0 1077.9 1024" fill="none"><path d="M0 0h1077.9v808.4h-246.2l-35 215.6-379.1-215.6H0V0z" fill="#fff"/><path d="M269.5 323.4h107.8v161.7H269.5zM646.7 323.4h107.8v161.7H646.7z" fill="#fff"/></svg>
+      </span>
+      MagicHub
+    </div>
+    <p class="tagline">一款面向个人与团队的轻量聊天软件：深黑界面、组件化架构、插件可扩展</p>
+  </header>
+
+  <section>
+    <h2>核心功能</h2>
+    <p class="desc">先做扎实的聊天体验，再逐步开放能力</p>
+    <div class="grid">
+      <div class="card"><b>即时聊天</b><span>WebSocket 实时收发、广播回显、在线状态，输入框与消息气泡一应俱全。</span></div>
+      <div class="card"><b>文件传输</b><span>会话内传输文件与图片（规划中），消息与文件统一走同一条消息链路。</span></div>
+      <div class="card"><b>组件化 UI</b><span>全局主题 Token + 聊天组件 CSS 分离，Base / Composite / Feature 三层组件体系。</span></div>
+      <div class="card"><b>插件系统</b><span>plugins/ 目录 + manifest.json 即插即用，装上就出现在导航栏，卸载即消失。</span></div>
+      <div class="card"><b>原生扩展</b><span>高频与底层能力用 Rust 通过 N-API 扩展 Node.js，保持前端轻量。</span></div>
+      <div class="card"><b>桌面端</b><span>Electron 打包为 exe，H5 与桌面共用同一套前端与后端协议。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>技术架构</h2>
+    <p class="desc">前后端同源部署，一份代码跑通浏览器与桌面</p>
+    <div class="stack">
+      <div class="layer"><code>apps/web</code><span>H5 前端：登录页 / 主界面 / 聊天组件（TS + React 规划中）</span><small>渲染层</small></div>
+      <div class="layer"><code>apps/server</code><span>Node.js 后端：静态服务 / 账号 API / WebSocket / 插件 API</span><small>服务层</small></div>
+      <div class="layer"><code>apps/desktop</code><span>Electron 桌面壳：内置服务 + 原生窗口，打包为 exe</span><small>桌面层</small></div>
+      <div class="layer"><code>core /</code><span>组件体系、插件宿主、通信协议等核心库（规划中）</span><small>核心层</small></div>
+      <div class="layer"><code>native/rust-core</code><span>Rust N-API 原生扩展：加密、文件分片、性能敏感路径（规划中）</span><small>原生层</small></div>
+      <div class="layer"><code>plugins /</code><span>插件市场：本页即第一个插件，新闻推送等后续插件同此协议</span><small>扩展层</small></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>当前进度</h2>
+    <p class="desc">按里程碑推进，每一步都可运行、可回退</p>
+    <div class="timeline">
+      <div class="step"><b>V0.1 · 产品定义</b><span>产品说明书 PPT、深黑 + 深紫 UI 组件演示、设计文档、git 仓库初始化</span></div>
+      <div class="step"><b>V0.2 · 骨架连通</b><span>WebSocket 前后端连通、JSON 账号注册登录、共享 CSS 组件体系、登录页</span></div>
+      <div class="step"><b>V0.3 · 主界面与插件</b><span>QQ 风格三栏主界面、插件系统 API、第一个示例插件（本页）、Electron exe 打包</span></div>
+      <div class="step"><b>V1.0 · 完整聊天</b><span>会话与消息持久化、文件传输、消息已读回执、Rust 原生扩展（规划中）</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>插件协议</h2>
+    <p class="desc">三步接入，装上即用</p>
+    <div class="proto">
+      <code>plugins/&lt;plugin-id&gt;/manifest.json   // 元信息：名称 / 版本 / 入口</code>
+      <code>plugins/&lt;plugin-id&gt;/index.html      // 插件页面：与主界面同源加载</code>
+      <p>后端启动时扫描 plugins/ 目录自动发现；主界面左侧导航动态渲染插件入口；点击后在聊天区打开插件视图。卸载插件只需删除对应文件夹。</p>
+    </div>
+  </section>
+
+  <footer>MagicHub · 深黑主题 · 深紫点睛 · 本页由「关于 MagicHub」插件提供</footer>
+</div>
+</body>
+</html>

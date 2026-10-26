@@ -3,62 +3,261 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MagicHub · WebSocket 连通演示</title>
+<title>MagicHub 主界面</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237C3AED'/%3E%3Cpath d='M8 14h48v30H38l-8 12v-12H8z' fill='%23EDE9FE'/%3E%3Ccircle cx='22' cy='29' r='3' fill='%23A855F7'/%3E%3Ccircle cx='42' cy='29' r='3' fill='%23A855F7'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/theme.css">
 <link rel="stylesheet" href="css/chat.css">
 <style>
-  body{height:100vh;display:flex;flex-direction:column}
-  .msg-area{flex:1;min-height:0}
+  /* —— 页面专属：窗口化主界面布局 —— */
+  body{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  .app-shell{height:calc(100vh - 46px);grid-template-columns:64px 240px 1fr;border-radius:0;border:none;box-shadow:none}
+  @media(max-width:820px){.app-shell{grid-template-columns:64px 1fr}}
+  .rail-avatar{width:38px;height:38px;border-radius:50%;background:var(--grad);color:#fff;font-weight:800;font-size:15px;
+    margin-bottom:14px;display:grid;place-items:center;box-shadow:0 4px 14px rgba(124,58,237,.45)}
+  .rail-plugins{display:flex;flex-direction:column;align-items:center;gap:6px}
+
+  /* 插件视图 */
+  .plugin-view{display:flex;flex-direction:column;min-width:0;background:var(--bg-soft)}
+  .plugin-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
+  .plugin-head h4{font-size:14px;font-weight:700}
+  .plugin-frame{flex:1;border:none;background:var(--bg)}
+
+  /* 占位视图（联系人/文件/通知/设置 演示） */
+  .ph-view{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;min-width:0}
+  .ph-view svg{opacity:.6}
 </style>
 </head>
 <body>
 
-<header class="topbar">
+<!-- ===== 窗口标题栏 ===== -->
+<header class="titlebar">
   <div class="logo"><span class="logo-badge"><svg viewBox="0 0 1077.9 1024" fill="none"><path d="M0 0h1077.9v808.4h-246.2l-35 215.6-379.1-215.6H0V0z" fill="#fff"/><path d="M269.5 323.4h107.8v161.7H269.5zM646.7 323.4h107.8v161.7H646.7z" fill="#fff"/></svg></span>MagicHub</div>
-  <span id="userChip" class="tag" style="display:none"></span>
-  <div class="status" id="status"><i></i><span id="statusText">未连接</span></div>
+  <span class="title" id="viewTitle">会话</span>
+  <div class="win-controls" aria-label="窗口控制">
+    <button id="winMin" title="最小化"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+    <button id="winMax" title="最大化/还原"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+    <button class="close" id="winClose" title="关闭"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
 </header>
 
-<div class="msg-area" id="msgArea">
-  <div class="empty" id="emptyTip">
-    <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
-    <span>启动后端后本页会自动连接（<b style="color:var(--text-2)">apps/server · npm start</b>）<br>输入任意文字并发送，广播消息会原样回显</span>
-  </div>
+<div class="app-shell">
+  <!-- ===== 左侧导航栏（QQ 风格） ===== -->
+  <nav class="rail" aria-label="主导航">
+    <button class="rail-avatar" id="avatarBtn" title="账号"></button>
+
+    <button class="rail-item on" data-view="chat" title="会话"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg></button>
+    <button class="rail-item" data-view="contacts" title="联系人"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.4 2.6-5 5.5-5s4.9 1.6 5.5 5M16 5.6a3 3 0 0 1 0 5.4M17.6 14.4c1.6.8 2.5 2.2 2.9 4.1"/></svg></button>
+    <button class="rail-item" data-view="files" title="文件"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></button>
+    <button class="rail-item" data-view="notices" title="通知"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10 21h4"/></svg></button>
+
+    <span class="rail-sep"></span>
+
+    <!-- 插件区：由 /api/plugins 动态渲染 -->
+    <div class="rail-plugins" id="pluginRail"></div>
+    <span class="rail-sep" id="pluginSep" hidden></span>
+
+    <button class="rail-item" data-view="settings" title="设置"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.3 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2l.3 2.6h4l.3-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg></button>
+  </nav>
+
+  <!-- ===== 会话列表 ===== -->
+  <aside class="list-pane">
+    <div class="list-head">
+      <h3>会话</h3>
+      <div class="search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input placeholder="搜索会话或消息"></div>
+    </div>
+    <div class="list" id="chatList">
+      <div class="chat-item on" data-name="产品设计群"><span class="avatar" style="background:linear-gradient(135deg,#7C3AED,#A855F7)">群</span><div class="c-main"><div class="c-row"><span class="c-name">产品设计群</span><span class="c-time">09:21</span></div><div class="c-prev">小狼：新版聊天界面已经更新完成</div></div><span class="badge">3</span></div>
+      <div class="chat-item" data-name="周工"><span class="avatar" style="background:linear-gradient(135deg,#2563EB,#38BDF8)">周</span><div class="c-main"><div class="c-row"><span class="c-name">周工</span><span class="c-time">昨天</span></div><div class="c-prev">收到，我这就去看。</div></div></div>
+      <div class="chat-item" data-name="MagicHub 官方"><span class="avatar" style="background:linear-gradient(135deg,#7C3AED,#A855F7)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="1.8"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 19h14"/></svg></span><div class="c-main"><div class="c-row"><span class="c-name">MagicHub 官方</span><span class="c-time">昨天</span></div><div class="c-prev">欢迎使用 MagicHub</div></div><span class="badge">1</span></div>
+      <div class="chat-item" data-name="林一"><span class="avatar" style="background:linear-gradient(135deg,#E05C8A,#F472B6)">林</span><div class="c-main"><div class="c-row"><span class="c-name">林一</span><span class="c-time">周一</span></div><div class="c-prev">会议纪要发你邮箱了</div></div></div>
+      <div class="chat-item" data-name="Rust 扩展讨论组"><span class="avatar" style="background:linear-gradient(135deg,#2FB36A,#34D399)">R</span><div class="c-main"><div class="c-row"><span class="c-name">Rust 扩展讨论组</span><span class="c-time">周一</span></div><div class="c-prev">N-API 基准测试结果</div></div><span class="badge">12</span></div>
+    </div>
+  </aside>
+
+  <!-- ===== 聊天主区 ===== -->
+  <main class="chat-pane">
+    <!-- 聊天视图 -->
+    <div class="chat-view" id="chatView" style="display:flex;flex-direction:column;min-width:0;flex:1">
+      <div class="chat-head">
+        <span class="dot"></span>
+        <h4 id="chatName">产品设计群</h4>
+        <div class="tools">
+          <button class="icon-btn" title="语音通话（演示）"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 16 0M7 12a5 5 0 0 1 10 0M10 12a2 2 0 0 1 4 0"/></svg></button>
+          <button class="icon-btn" title="文件传输（规划中）"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></button>
+          <button class="icon-btn" title="更多"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+        </div>
+        <div class="status" id="status"><i></i><span id="statusText">未连接</span></div>
+      </div>
+      <div class="msg-area" id="msgArea">
+        <div class="empty" id="emptyTip">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
+          <span>启动后端后自动连接（<b style="color:var(--text-2)">apps/server · npm start</b>）<br>输入消息并发送，广播消息将原样回显</span>
+        </div>
+      </div>
+      <div class="input-bar">
+        <button class="icon-btn" title="表情（演示）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
+        <textarea id="input" placeholder="输入消息，Enter 发送" disabled></textarea>
+        <button class="send" id="sendBtn" disabled>发送</button>
+      </div>
+    </div>
+
+    <!-- 插件视图 -->
+    <div class="plugin-view" id="pluginView" style="display:none">
+      <div class="plugin-head">
+        <span class="dot"></span>
+        <h4 id="pluginTitle">插件</h4>
+        <div class="tools"><button class="icon-btn" id="pluginClose" title="关闭插件"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      </div>
+      <iframe class="plugin-frame" id="pluginFrame" title="插件内容" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+    </div>
+
+    <!-- 占位视图（其余导航项演示） -->
+    <div class="ph-view" id="phView" style="display:none;flex:1">
+      <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>
+      <span id="phText">功能开发中，敬请期待</span>
+    </div>
+  </main>
 </div>
 
-<div class="input-bar">
-  <input class="input" id="input" placeholder="输入消息…" maxlength="500" disabled>
-  <button class="send" id="sendBtn" disabled>发送</button>
-</div>
-
-<div class="note-bar">WebSocket 地址：<code id="wsUrl">ws://localhost:3000</code> · 断线后每 3 秒自动重连</div>
+<div id="toast" role="status"></div>
 
 <script>
 (function () {
+  "use strict";
   const WS_URL = "ws://localhost:3000";
-  const statusEl = document.getElementById("status");
-  const statusText = document.getElementById("statusText");
-  const msgArea = document.getElementById("msgArea");
-  const input = document.getElementById("input");
-  const sendBtn = document.getElementById("sendBtn");
-  const emptyTip = document.getElementById("emptyTip");
-  document.getElementById("wsUrl").textContent = WS_URL;
+  const $ = function (id) { return document.getElementById(id); };
+  const toastEl = $("toast");
+  let toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2200);
+  }
 
-  // 当前登录用户（登录页写入 localStorage）
+  /* ===== 账号与头像 ===== */
   const user = localStorage.getItem("magichub_user");
-  const userChip = document.getElementById("userChip");
+  const avatarBtn = $("avatarBtn");
   if (user) {
-    userChip.style.display = "inline-flex";
-    userChip.textContent = "@" + user;
-    userChip.title = "点击退出登录";
-    userChip.style.cursor = "pointer";
-    userChip.addEventListener("click", function () {
+    avatarBtn.textContent = user.charAt(0).toUpperCase();
+    avatarBtn.title = "@" + user + " · 点击退出";
+    avatarBtn.addEventListener("click", function () {
       localStorage.removeItem("magichub_user");
       location.href = "login.html";
     });
+  } else {
+    avatarBtn.textContent = "?";
+    avatarBtn.title = "未登录 · 点击去登录";
+    avatarBtn.addEventListener("click", function () { location.href = "login.html"; });
   }
 
+  /* ===== 窗口控制（Electron 下走原生，H5 下演示） ===== */
+  const native = window.magicHub || null;
+  $("winMin").addEventListener("click", function () { native ? native.minimize() : toast("最小化（演示）"); });
+  $("winMax").addEventListener("click", function () { native ? native.maximize() : toast("最大化（演示）"); });
+  $("winClose").addEventListener("click", function () { native ? native.close() : toast("关闭（演示）"); });
+
+  /* ===== 导航切换（会话 / 占位视图 / 插件视图） ===== */
+  const viewTitle = $("viewTitle");
+  const chatView = $("chatView");
+  const pluginView = $("pluginView");
+  const phView = $("phView");
+  const phText = $("phText");
+  const railItems = Array.prototype.slice.call(document.querySelectorAll(".rail-item[data-view]"));
+
+  function showChat() {
+    pluginView.style.display = "none";
+    phView.style.display = "none";
+    chatView.style.display = "flex";
+    viewTitle.textContent = "会话";
+  }
+  function showPh(name) {
+    pluginView.style.display = "none";
+    phView.style.display = "flex";
+    chatView.style.display = "none";
+    phText.textContent = name + " · 功能开发中，敬请期待";
+    viewTitle.textContent = name;
+  }
+  function showPlugin(id, meta) {
+    chatView.style.display = "none";
+    phView.style.display = "none";
+    pluginView.style.display = "flex";
+    viewTitle.textContent = meta.name;
+    $("pluginTitle").textContent = meta.name;
+    $("pluginFrame").src = "/plugins/" + id + "/" + meta.entry;
+  }
+  railItems.forEach(function (item) {
+    item.addEventListener("click", function () {
+      railItems.forEach(function (x) { x.classList.remove("on"); });
+      document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
+      item.classList.add("on");
+      const v = item.getAttribute("data-view");
+      if (v === "chat") showChat();
+      else showPh(item.title || v);
+    });
+  });
+
+  /* ===== 插件系统：加载 /api/plugins 并渲染左侧入口 ===== */
+  function loadPlugins() {
+    fetch("/api/plugins")
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        const list = (data.ok && data.data && data.data.plugins) || [];
+        const rail = $("pluginRail");
+        rail.innerHTML = "";
+        list.forEach(function (p) {
+          const btn = document.createElement("button");
+          btn.className = "rail-item";
+          btn.title = p.name + "（插件）";
+          if (p.icon) {
+            btn.innerHTML = '<img src="' + p.icon + '" width="20" height="20" alt="">';
+          } else {
+            btn.textContent = p.name.charAt(0);
+            btn.style.fontWeight = "800";
+            btn.style.fontSize = "14px";
+            btn.style.color = "var(--accent-soft)";
+          }
+          btn.addEventListener("click", function () {
+            railItems.forEach(function (x) { x.classList.remove("on"); });
+            document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
+            btn.classList.add("on");
+            showPlugin(p.id, p);
+          });
+          rail.appendChild(btn);
+        });
+        $("pluginSep").hidden = list.length === 0;
+      })
+      .catch(function () { /* 后端未启动：不渲染插件入口 */ });
+  }
+
+  $("pluginClose").addEventListener("click", function () {
+    showChat();
+    document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
+    railItems.forEach(function (x) { x.classList.remove("on"); });
+    railItems[0].classList.add("on");
+  });
+
+  /* ===== 会话列表交互 ===== */
+  document.querySelectorAll("#chatList .chat-item").forEach(function (item) {
+    item.addEventListener("click", function () {
+      document.querySelectorAll("#chatList .chat-item").forEach(function (x) { x.classList.remove("on"); });
+      item.classList.add("on");
+      $("chatName").textContent = item.getAttribute("data-name");
+      if (pluginView.style.display === "flex") {
+        showChat();
+        railItems.forEach(function (x) { x.classList.remove("on"); });
+        railItems[0].classList.add("on");
+      }
+    });
+  });
+
+  /* ===== WebSocket：连接 + 广播 ===== */
+  const statusEl = $("status");
+  const statusText = $("statusText");
+  const msgArea = $("msgArea");
+  const input = $("input");
+  const sendBtn = $("sendBtn");
+  const emptyTip = $("emptyTip");
   let ws = null;
   let retryTimer = null;
 
@@ -68,7 +267,6 @@
     if (state === "err") statusEl.classList.add("err");
     statusText.textContent = text;
   }
-
   function addSystem(text) {
     emptyTip.style.display = "none";
     const div = document.createElement("div");
@@ -77,7 +275,6 @@
     msgArea.appendChild(div);
     msgArea.scrollTop = msgArea.scrollHeight;
   }
-
   function addMessage(text, mine) {
     emptyTip.style.display = "none";
     const div = document.createElement("div");
@@ -89,12 +286,10 @@
     msgArea.appendChild(div);
     msgArea.scrollTop = msgArea.scrollHeight;
   }
-
   function connect() {
     clearTimeout(retryTimer);
     setStatus("", "连接中…");
     ws = new WebSocket(WS_URL);
-
     ws.onopen = function () {
       setStatus("on", "已连接");
       input.disabled = false;
@@ -102,7 +297,6 @@
       input.focus();
       addSystem("已连接到 MagicHub 服务，等待 hello…");
     };
-
     ws.onmessage = function (ev) {
       let frame;
       try { frame = JSON.parse(ev.data); } catch { return; }
@@ -112,19 +306,14 @@
         addMessage(String(frame.text), false);
       }
     };
-
     ws.onclose = function () {
       setStatus("err", "已断开 · 3 秒后重连");
       input.disabled = true;
       sendBtn.disabled = true;
       retryTimer = setTimeout(connect, 3000);
     };
-
-    ws.onerror = function () {
-      // onclose 会随后触发，由它统一处理重连
-    };
+    ws.onerror = function () { /* onclose 统一处理 */ };
   }
-
   function send() {
     const text = input.value.trim();
     if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -133,12 +322,12 @@
     input.value = "";
     input.focus();
   }
-
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") send();
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   });
 
+  loadPlugins();
   connect();
 })();
 </script>
