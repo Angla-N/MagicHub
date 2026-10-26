@@ -1,0 +1,25 @@
+# —— 中间产物（工作目录，不纳入版本控制）——
+.ppt-work/
+ui-demo/_shots/
+
+# —— Node ——
+node_modules/
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# —— 环境与密钥 ——
+.env
+.env.*
+!.env.example
+
+# —— 编辑器 / 系统 ——
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# —— 日志 ——
+*.log
+npm-debug.log*
