@@ -56,15 +56,15 @@
 /* 消息区 */
 .msg-area{flex:1;min-height:0;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
 .date-pill{align-self:center;font-size:10px;color:var(--text-3);background:var(--surface);padding:3px 12px;border-radius:999px;border:1px solid var(--border)}
-.msg{display:flex;gap:8px;max-width:82%;animation:pop .3s ease both}
+.msg{display:flex;flex-direction:column;gap:3px;max-width:82%;animation:pop .3s ease both}
 @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.msg.in{align-self:flex-start}
-.msg.out{align-self:flex-end}
+.msg.in{align-self:flex-start;align-items:flex-start}
+.msg.out{align-self:flex-end;align-items:flex-end}
 .bubble{padding:9px 13px;border-radius:14px;font-size:13px;line-height:1.55;word-break:break-word}
 .msg.in .bubble{background:var(--surface-2);border:1px solid var(--border);border-top-left-radius:4px}
 .msg.out .bubble{background:var(--grad);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 14px rgba(124,58,237,.35)}
-.msg-meta{font-size:10px;color:var(--text-3);margin-top:4px}
-.msg.out .msg-meta{text-align:right}
+/* 时间戳：独立小行、微弱不居中 */
+.msg-time{font-size:10px;color:var(--text-3);opacity:.72;line-height:1.2;margin-top:1px;user-select:none}
 
 /* 迷你气泡（组件演示用） */
 .bubble-sm{padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.5;max-width:260px}
@@ -152,7 +152,7 @@
 
 /* 图片消息 */
 .msg-img{display:block;max-width:260px;max-height:220px;border-radius:12px;object-fit:cover;cursor:zoom-in;box-shadow:0 4px 14px rgba(0,0,0,.35)}
-.bubble.has-img{padding:6px;background:var(--bg-soft);border-color:var(--border)}
+.bubble.has-img{padding:3px;background:rgba(255,255,255,.028);border-color:rgba(124,58,237,.12)}
 
 /* 文件卡片 */
 .file-card{display:flex;align-items:center;gap:10px;min-width:200px;max-width:280px}

@@ -189,6 +189,20 @@
   </div>
 </div>
 
+<!-- 我的资料弹窗（点击导航栏头像弹出，可放大查看，退出登录需点按钮） -->
+<div class="modal-mask" id="myMask" hidden>
+  <div class="card-modal">
+    <div class="card-avatar" id="myCardAvatar"></div>
+    <div class="card-name" id="myCardName"></div>
+    <div class="card-acc" id="myCardAcc"></div>
+    <div class="card-tag">我的账号</div>
+    <div class="card-actions">
+      <button class="add-btn" id="myClose" style="background:var(--surface);color:var(--text-2);border:1px solid var(--border)">关闭</button>
+      <button class="add-btn" id="myLogout" style="background:rgba(244,63,94,.16);color:#fb7185;border:1px solid rgba(244,63,94,.4)">退出登录</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -224,7 +238,7 @@
     return h;
   }
 
-  /* ===== 账号头像：方形圆角；点击退出登录 ===== */
+  /* ===== 账号头像：点击放大查看，不直接退出登录 ===== */
   var avatarBtn = $("avatarBtn");
   function renderAvatar() {
     avatarBtn.innerHTML = "";
@@ -237,10 +251,18 @@
     } else {
       avatarBtn.textContent = (session.displayName || session.username).charAt(0).toUpperCase();
     }
-    avatarBtn.title = (session.displayName || session.username) + " · 点击退出登录";
+    avatarBtn.title = (session.displayName || session.username) + " · 点击查看我的资料";
   }
   renderAvatar();
   avatarBtn.addEventListener("click", function () {
+    $("myCardAvatar").innerHTML = avatarHTML(session);
+    $("myCardName").textContent = session.displayName || session.username;
+    $("myCardAcc").textContent = "账号: " + session.username;
+    $("myMask").hidden = false;
+  });
+  $("myClose").addEventListener("click", function () { $("myMask").hidden = true; });
+  $("myMask").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+  $("myLogout").addEventListener("click", function () {
     localStorage.removeItem("magichub_session");
     location.href = "login.html";
   });
@@ -275,6 +297,8 @@
     viewTitle.textContent = "会话";
     setListPane(true);
     loadConvs();
+    // 切回聊天视图时重新拉取当前会话消息（与后端保持一致）
+    if (activeConv) openConv(activeConv);
   }
   function showContacts() {
     hideAllViews();
