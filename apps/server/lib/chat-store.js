@@ -103,6 +103,21 @@ export function addFriend(me, other) {
   return { ok: true, data: { username: other } };
 }
 
+/** 删除好友：双向移除关系（不是好友则幂等成功） */
+export function removeFriend(me, other) {
+  const users = loadUsers();
+  if (!users[me]) return { ok: false, error: { code: "NOT_FOUND", message: "账号不存在" } };
+  if (me === other) return { ok: false, error: { code: "INVALID", message: "不能删除自己" } };
+
+  users[me].friends = (users[me].friends || []).filter((n) => n !== other);
+  if (users[other]) {
+    users[other].friends = (users[other].friends || []).filter((n) => n !== me);
+  }
+  saveUsers(users);
+  console.log(`[chat] 好友解除: ${me} -x- ${other}`);
+  return { ok: true, data: { username: other } };
+}
+
 /** 会话列表（我的好友会话），附最后一条消息；无会话时自动创建空白会话 */
 export function listConversations(me) {
   const chat = loadChat();

@@ -12,6 +12,7 @@
 const { app, Tray, Menu, utilityProcess } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { execFileSync } = require("node:child_process");
 
 app.setName("MagicHub-Server");
 
@@ -28,23 +29,40 @@ const sevenZip = app.isPackaged
   ? path.join(process.resourcesPath, "7za.exe")
   : path.join(__dirname, "7za.exe");
 
-/** 首次启动：把内置插件复制进插件市场目录（不覆盖用户已上传/修改的版本） */
+/** 首次启动：把内置插件打成 .7z 放进插件市场（data/plugins/<id>.7z + .meta/<id>.json），已存在不覆盖 */
 function seedPlugins() {
   try {
     fs.mkdirSync(pluginsRoot, { recursive: true });
-    if (!fs.existsSync(bundledPlugins)) return;
+    fs.mkdirSync(path.join(pluginsRoot, ".meta"), { recursive: true });
+    if (!fs.existsSync(bundledPlugins) || !fs.existsSync(sevenZip)) return;
     for (const name of fs.readdirSync(bundledPlugins)) {
       const src = path.join(bundledPlugins, name);
       if (!fs.statSync(src).isDirectory()) continue;
       const mf = path.join(src, "manifest.json");
       if (!fs.existsSync(mf)) continue;
-      const dest = path.join(pluginsRoot, name);
-      if (fs.existsSync(dest)) continue; // 已存在（可能是用户上传的新版本）不覆盖
-      fs.cpSync(src, dest, { recursive: true });
-      console.log(`[magichub-server] 内置插件已加入市场: ${name}`);
+      const pack = path.join(pluginsRoot, name + ".7z");
+      const metaFile = path.join(pluginsRoot, ".meta", name + ".json");
+      if (fs.existsSync(pack) && fs.existsSync(metaFile)) continue; // 已存在（用户可能已更新/删除过）不覆盖
+      // 打 .7z：在插件目录内打包，保证包根就是插件内容
+      execFileSync(sevenZip, ["a", "-t7z", "-mx=5", "-y", "-bso0", "-bsp0", pack, "*"], {
+        cwd: src, windowsHide: true, stdio: "pipe",
+      });
+      // 写市场元数据（内置：system / 公开 + manifest 快照）
+      const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+      fs.writeFileSync(metaFile, JSON.stringify({
+        author: "system", public: true, uploadedAt: 0,
+        manifest: {
+          name: m.name || name,
+          version: m.version || "0.0.0",
+          description: m.description || "",
+          entry: m.entry || "index.html",
+          icon: m.icon || "",
+        },
+      }, null, 2));
+      console.log(`[magichub-server] 内置插件已加入市场: ${name}.7z`);
     }
   } catch (e) {
-    console.error("[magichub-server] 内置插件复制失败（不影响服务）:", e.message);
+    console.error("[magichub-server] 内置插件种子失败（不影响服务）:", e.message);
   }
 }
 

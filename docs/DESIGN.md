@@ -266,16 +266,21 @@ declare namespace magicHub {
 ### 6.1 插件市场（已实现）
 
 * **服务器侧（MagicHub-Server）**：插件市场根目录 = Server.exe 同目录 `data/plugins/`（便携，不占 C 盘）。
-  * 首次启动自动把内置插件（`resources/plugins/`）复制进市场（已存在不覆盖）。
-  * 上传：仅接受 `.7z`（≤10MB），用内置 7za.exe 解压（自动向下最多 2 层找 manifest.json），校验
-    `id/name/version/entry` 与入口文件后入库，同时保存 `.7z` 副本与 `meta.json`（author / public / uploadedAt）。
-  * API：`GET /api/plugins`（带 isOwner）、`GET /api/plugins/<id>/download`、`POST /api/plugins/upload`、
-    `POST /api/plugins/<id>/visibility`、`DELETE /api/plugins/<id>`（仅作者，system 内置禁删）。
-  * 下载优先返回已存 `.7z`，否则现场用 7za 打包含 manifest 的目录。
+  * **存储模型：市场内一个插件只有一份 `.7z` 压缩包**（`<id>.7z`）+ 一份元数据（`.meta/<id>.json`，
+    含 author / public / uploadedAt / manifest 快照），**不保留源码目录**——源码与压缩包并存是历史遗留，已废弃。
+  * 首次启动自动把内置插件（`resources/plugins/`）现场打成 `.7z` 入库（已存在 pack+meta 则跳过）。
+  * 上传：仅接受 `.7z`（≤10MB），用内置 7za.exe 解压到临时目录校验
+    `id/name/version/entry` 与入口文件，通过后**只入库存 `.7z` + `.meta`**，临时目录即清。
+  * API：`GET /api/plugins`（**私有仅作者可见** + isOwner）、`GET /api/plugins/<id>/download`（**私有仅作者可下**）、
+    `POST /api/plugins/upload`、`POST /api/plugins/<id>/visibility`、`DELETE /api/plugins/<id>`（仅作者，system 内置禁删）。
+  * 兼容：开发仓库 `plugins/` 下旧源码目录（如 `about-magichub/`）在列表时视为市场项，下载时现场打 `.7z` 落盘复用。
 * **客户端侧（MagicHub-Client）**：本地插件根目录 = Client.exe 同目录 `data/plugins/`。
   * 市场下载 `.7z` → 主进程 7za 解压 → 校验 manifest 且 id 一致 → 写入本地插件目录 → 自动加载
     （侧栏插件区、设置界面「已启用插件」即时更新）。
   * 卸载即删除本地插件目录。
+  * 市场界面：顶部统计条（我发布的 / 已下载 / 市场总数）+「全部 / 我的」Tab 过滤；插件列表为**网格卡片**，
+    作者对自己发布的插件可见并管理（设为公开 / 删除）。
+* **通讯录**：好友列表内可直接**删除好友**（列表行与资料卡均有删除入口，双向解除好友关系）。
 * **打包工具 `tools/plugin-pack.py`**：校验插件格式（id 1-64 位、必填字段、入口/图标存在）→ 在插件目录内
   打 `.7z`（保证包根就是插件内容）→ `--init` 生成 manifest 模板，`--list` 只校验。
   `python plugin-pack.py <插件目录> [-o 输出.7z] [--init] [--list]`。
