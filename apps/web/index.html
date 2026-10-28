@@ -928,7 +928,11 @@
       try { frame = JSON.parse(ev.data); } catch (e) { return; }
       if (frame.type === "auth_ok") {
         setStatus("on", "已连接");
-        if (activeConv) setInputEnabled(true);
+        if (activeConv) {
+          setInputEnabled(true);
+          // 重连成功后重新拉取当前会话，保证与其他客户端/窗口保持同步
+          openConv(activeConv);
+        }
       } else if (frame.type === "auth_fail") {
         setStatus("err", "登录已过期");
         setInputEnabled(false);

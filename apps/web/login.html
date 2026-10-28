@@ -9,12 +9,30 @@
 <style>
   /* 页面专属：深紫星云背景 + 深色渐变蒙版（背景图直接使用用户素材，不改动） */
   body{background:url("assets/cover-bg.jpg") center/cover no-repeat fixed,var(--bg)}
-  .auth-page{position:relative}
+  .auth-page{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 32px}
   .auth-page::before{content:"";position:fixed;inset:0;z-index:0;
-    background:linear-gradient(180deg,rgba(14,14,14,.86) 0%,rgba(18,18,18,.5) 52%,rgba(14,14,14,.9) 100%)}
-  .auth-card{position:relative;z-index:1;background:rgba(37,37,38,.74);backdrop-filter:blur(16px);
-    border:1px solid rgba(255,255,255,.08)}
-  .auth-card.wide{max-width:420px}
+    background:linear-gradient(100deg,rgba(10,10,10,.92) 0%,rgba(14,14,14,.72) 45%,rgba(16,12,30,.62) 72%,rgba(20,16,38,.82) 100%)}
+  /* 左右分栏：左侧品牌区 + 右侧登录卡片，填满画面避免大面积留白 */
+  .auth-layout{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
+    gap:clamp(48px,6vw,96px);width:100%;max-width:1120px;flex-wrap:wrap}
+  .auth-brand{flex:1 1 380px;max-width:520px;min-width:320px;color:var(--text-1)}
+  .brand-logo{width:76px;height:76px;margin-bottom:22px;filter:drop-shadow(0 8px 28px rgba(124,58,237,.55))}
+  .brand-logo svg{width:100%;height:100%;display:block}
+  .brand-title{font-size:clamp(40px,5vw,54px);font-weight:800;letter-spacing:1px;margin:0 0 14px;
+    background:linear-gradient(100deg,#EDE9FE 0%,#C4B5FD 38%,#A78BFA 68%,#7C3AED 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand-slogan{font-size:17px;color:var(--text-2);margin:0 0 34px;letter-spacing:.5px}
+  .brand-feats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:18px}
+  .brand-feats li{display:flex;align-items:center;gap:14px;font-size:14.5px;color:var(--text-2)}
+  .brand-feats svg{width:22px;height:22px;flex:none;color:var(--accent-soft);
+    filter:drop-shadow(0 0 10px rgba(167,139,250,.45))}
+  .brand-foot{margin-top:44px;font-size:12px;color:var(--text-3);letter-spacing:1px}
+  .auth-card-col{flex:0 0 420px}
+  .auth-card{background:rgba(37,37,38,.78);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);
+    border-radius:20px;padding:34px 34px 30px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
+  .auth-card.wide{max-width:420px;width:100%}
+  .card-title{margin:0 0 4px;font-size:24px;font-weight:700;color:var(--text-1)}
+  .card-sub{margin:0 0 20px;font-size:13px;color:var(--text-3)}
   .reg-field{display:none;animation:regIn .25s ease both}
   @keyframes regIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
   .auth-card.reg .reg-field{display:block}
@@ -31,15 +49,38 @@
   .last-login{margin-top:2px;padding:8px 12px;border-radius:10px;background:rgba(124,58,237,.12);
     border:1px solid rgba(124,58,237,.32);color:var(--text-2);font-size:12px}
   .last-login b{color:var(--accent-soft)}
+  /* 窄屏：隐藏品牌区，仅居中登录卡片 */
+  @media (max-width:900px){
+    .auth-page{padding:24px 16px}
+    .auth-brand{display:none}
+    .auth-card-col{flex-basis:100%;max-width:420px}
+  }
 </style>
 </head>
 <body>
 <div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <div class="auth-page">
-  <div class="auth-card wide" id="authCard">
-    <div class="logo"><span class="logo-badge"><svg viewBox="0 0 1077.9 1024" fill="none"><path d="M0 0h1077.9v808.4h-246.2l-35 215.6-379.1-215.6H0V0z" fill="#fff"/><path d="M269.5 323.4h107.8v161.7H269.5zM646.7 323.4h107.8v161.7H646.7z" fill="#fff"/></svg></span>MagicHub</div>
-    <p class="subtitle">登录或注册，开始你的轻量聊天</p>
+  <div class="auth-layout">
+
+    <!-- 左侧品牌展示区 -->
+    <section class="auth-brand">
+      <div class="brand-logo"><svg viewBox="0 0 1077.9 1024" fill="none"><path d="M0 0h1077.9v808.4h-246.2l-35 215.6-379.1-215.6H0V0z" fill="#A78BFA"/><path d="M269.5 323.4h107.8v161.7H269.5zM646.7 323.4h107.8v161.7H646.7z" fill="#17171A"/></svg></div>
+      <h1 class="brand-title">MagicHub</h1>
+      <p class="brand-slogan">轻量 · 实时 · 可扩展的桌面聊天工作台</p>
+      <ul class="brand-feats">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg><span>实时消息与文件传输，多端同步</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>插件系统，能力按需扩展</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>内置服务器，开箱即用</span></li>
+      </ul>
+      <div class="brand-foot">MagicHub v1.0 · 深紫星云版</div>
+    </section>
+
+    <!-- 右侧登录 / 注册卡片 -->
+    <section class="auth-card-col">
+      <div class="auth-card wide" id="authCard">
+        <h2 class="card-title">欢迎回来</h2>
+        <p class="card-sub">登录或注册，开始你的轻量聊天</p>
 
     <div class="tabs" role="tablist">
       <button class="tab on" id="tabLogin" type="button">登录</button>
@@ -92,6 +133,8 @@
     <p class="auth-switch" id="switchHint">
       还没有账号？<button type="button" id="switchBtn">去注册</button>
     </p>
+      </div>
+    </section>
   </div>
 </div>
 

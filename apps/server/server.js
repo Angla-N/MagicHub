@@ -387,13 +387,15 @@ const httpServer = createServer(async (req, res) => {
 /* ================= WebSocket：登录认证 + 定向推送 ================= */
 
 const wss = new WebSocketServer({ server: httpServer });
-const wsClients = new Map(); // username -> ws（在线连接）
+const wsClients = new Map(); // username -> Set<ws>（同一账号可多端在线，全部实时送达）
 
-/** 定向推送给指定用户（对方在线则实时送达） */
+/** 定向推送给指定用户的所有在线连接 */
 function pushToPeer(username, frame) {
-  const target = wsClients.get(username);
-  if (target && target.readyState === WebSocket.OPEN) {
-    target.send(JSON.stringify(frame));
+  const conns = wsClients.get(username);
+  if (!conns) return;
+  const payload = JSON.stringify(frame);
+  for (const c of conns) {
+    if (c.readyState === WebSocket.OPEN) c.send(payload);
   }
 }
 
@@ -413,9 +415,10 @@ wss.on("connection", (ws) => {
       const s = sessions.get(String(frame.token));
       if (s && s.expiresAt >= Date.now()) {
         ws.username = s.username;
-        wsClients.set(ws.username, ws);
+        if (!wsClients.has(ws.username)) wsClients.set(ws.username, new Set());
+        wsClients.get(ws.username).add(ws);
         ws.send(JSON.stringify({ type: "auth_ok", username: ws.username }));
-        console.log(`[ws] ${ws.username} 已认证（在线 ${wsClients.size}）`);
+        console.log(`[ws] ${ws.username} 已认证（在线 ${wss.clients.size} 连接）`);
       } else {
         ws.send(JSON.stringify({ type: "auth_fail", message: "登录已过期，请重新登录" }));
       }
@@ -423,8 +426,14 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    if (ws.username) wsClients.delete(ws.username);
-    console.log(`[ws] client disconnected (online: ${wsClients.size})`);
+    if (ws.username) {
+      const conns = wsClients.get(ws.username);
+      if (conns) {
+        conns.delete(ws);
+        if (!conns.size) wsClients.delete(ws.username);
+      }
+    }
+    console.log(`[ws] client disconnected (online: ${wss.clients.size})`);
   });
 
   ws.on("error", () => { /* close 统一处理 */ });

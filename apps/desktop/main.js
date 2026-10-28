@@ -98,11 +98,11 @@ function createWindow() {
   });
 
   win.once("ready-to-show", () => win.show());
-  // 前端独立加载本地页面（file://），API / WS 跨域走内置服务（后端已开 CORS）
-  const webIndex = app.isPackaged
-    ? path.join(process.resourcesPath, "web", "index.html")
-    : path.join(__dirname, "..", "..", "web", "index.html");
-  win.loadFile(webIndex);
+  // 打开程序默认停在登录页（用户确认登录后才进入主界面），登录成功后再跳转 index.html
+  const webEntry = app.isPackaged
+    ? path.join(process.resourcesPath, "web", "login.html")
+    : path.join(__dirname, "..", "..", "web", "login.html");
+  win.loadFile(webEntry);
   win.on("closed", () => { win = null; });
 }
 
