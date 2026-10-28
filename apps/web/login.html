@@ -27,6 +27,10 @@
   .avatar-tip{font-size:11px;color:var(--text-3);line-height:1.5}
   .avatar-preview{width:64px;height:64px;border-radius:14px;object-fit:cover;display:none}
   #avatarInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+  .server-tip{font-size:11px;color:var(--text-3);margin-top:5px;line-height:1.5}
+  .last-login{margin-top:2px;padding:8px 12px;border-radius:10px;background:rgba(124,58,237,.12);
+    border:1px solid rgba(124,58,237,.32);color:var(--text-2);font-size:12px}
+  .last-login b{color:var(--accent-soft)}
 </style>
 </head>
 <body>
@@ -72,6 +76,15 @@
         <input class="input" id="password" name="password" type="password" autocomplete="current-password"
                placeholder="至少 6 位" maxlength="64">
       </div>
+
+      <div class="field">
+        <label for="server">服务器地址</label>
+        <input class="input" id="server" name="server" autocomplete="off" spellcheck="false"
+               placeholder="http://localhost:3000">
+        <div class="server-tip">默认连接本机；也可填部署服务器 IP，如 http://192.168.1.100:3000</div>
+      </div>
+
+      <div class="last-login" id="lastLogin" hidden>上次登录：<b id="lastLoginName"></b>，请输入密码登录</div>
       <div class="auth-error" id="authError"></div>
       <button class="btn btn-primary" id="submitBtn" type="submit">登 录</button>
     </form>
@@ -86,7 +99,18 @@
 (function () {
   "use strict";
   var mode = "login"; // login | register
-  var API = "http://localhost:3000"; // 后端独立服务；Electron 桌面端由 magicHub.serverBase 覆盖
+  var injected = (window.magicHub && window.magicHub.serverBase) || "";
+  var serverEl = document.getElementById("server");
+  // 服务器地址：上次保存的 > Electron 注入 > 本机默认
+  serverEl.value = localStorage.getItem("magichub_server") || injected || "http://localhost:3000";
+  /** 规范化服务器地址并即时保存 */
+  function getAPI() {
+    var v = serverEl.value.trim();
+    if (!v) v = "http://localhost:3000";
+    if (!/^https?:\/\//i.test(v)) v = "http://" + v;
+    if (/\/$/.test(v)) v = v.slice(0, -1);
+    return v;
+  }
   var form = document.getElementById("authForm");
   var usernameEl = document.getElementById("username");
   var displayNameEl = document.getElementById("displayName");
@@ -99,8 +123,6 @@
   var switchHint = document.getElementById("switchHint");
   var authCard = document.getElementById("authCard");
   var avatarData = null; // base64 data URL（未选则为 null）
-
-  if (window.magicHub && window.magicHub.serverBase) API = window.magicHub.serverBase;
 
   function setMode(m) {
     mode = m;
@@ -187,6 +209,7 @@
 
     submitBtn.disabled = true;
     submitBtn.textContent = mode === "login" ? "登录中…" : "注册中…";
+    var API = getAPI();
 
     fetch(API + (mode === "login" ? "/api/login" : "/api/register"), {
       method: "POST",
@@ -207,13 +230,16 @@
             submitBtn.textContent = "登 录";
             return;
           }
-          // 登录成功：保存会话（含 token 与资料），进入主界面
+          // 登录成功：保存会话（含 token、资料与服务器地址），进入主界面
           var d = data.data || {};
+          var serverBase = getAPI();
+          localStorage.setItem("magichub_server", serverBase);
           localStorage.setItem("magichub_session", JSON.stringify({
             username: d.username,
             displayName: d.displayName || d.username,
             avatar: d.avatar || null,
             token: d.token,
+            serverBase: serverBase,
             loginAt: Date.now()
           }));
           location.href = "index.html";
@@ -224,15 +250,23 @@
         }
       })
       .catch(function () {
-        showError("无法连接服务器，请先启动后端（apps/server · npm start）");
+        showError("无法连接服务器，请检查服务器地址是否正确（默认 http://localhost:3000）");
         submitBtn.disabled = false;
         submitBtn.textContent = mode === "login" ? "登 录" : "注 册";
       });
   });
 
-  // 若已登录，直接进入聊天页
-  if (localStorage.getItem("magichub_session")) {
-    location.href = "index.html";
+  // 默认停留在登录页：即使上次登录过也不自动进入，由用户确认登录后再进（避免 token 过期直接进入报"登录超时"）
+  var last = localStorage.getItem("magichub_session");
+  if (last) {
+    try {
+      var ls = JSON.parse(last);
+      if (ls && ls.username) {
+        document.getElementById("lastLoginName").textContent = ls.displayName || ls.username;
+        document.getElementById("lastLogin").hidden = false;
+        usernameEl.value = ls.username;
+      }
+    } catch (e) { /* 忽略损坏的会话 */ }
   }
 })();
 </script>

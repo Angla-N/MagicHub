@@ -73,7 +73,7 @@
   <nav class="rail" aria-label="主导航">
     <button class="rail-avatar" id="avatarBtn" title="账号"></button>
 
-    <button class="rail-item on" data-view="chat" title="会话"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg></button>
+    <button class="rail-item on" data-view="chat" title="会话"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12.077 3C7.149 3 3 6.96 3 11.843V21l9.075-.01c4.928 0 8.925-4.11 8.925-8.993C21 7.113 17 3 12.077 3m3.92 12.859a5.57 5.57 0 0 1-6.102 1.043l-3.595.805 1.001-3.192a5.44 5.44 0 0 1 .11-5.415 5.55 5.55 0 0 1 4.753-2.678h.006a5.53 5.53 0 0 1 5.131 3.438 5.44 5.44 0 0 1-1.304 5.998"/></svg></button>
     <button class="rail-item" data-view="contacts" title="通讯录"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.4 2.6-5 5.5-5s4.9 1.6 5.5 5M16 5.6a3 3 0 0 1 0 5.4M17.6 14.4c1.6.8 2.5 2.2 2.9 4.1"/></svg></button>
 
     <span class="rail-sep"></span>
@@ -207,10 +207,6 @@
 (function () {
   "use strict";
 
-  /* ===== 服务地址：Electron 由主进程注入，H5 默认本地后端 ===== */
-  var BASE = (window.magicHub && window.magicHub.serverBase) || "http://localhost:3000";
-  var WS_URL = BASE.replace(/^http/, "ws") + "/";
-
   /* ===== 登录门禁：必须真实登录后才能进入主界面 ===== */
   var sessionStr = localStorage.getItem("magichub_session");
   if (!sessionStr) { location.replace("login.html"); return; }
@@ -221,6 +217,12 @@
     location.replace("login.html");
     return;
   }
+
+  /* ===== 服务地址：用户填写的服务器地址 > Electron 注入 > 本机默认 ===== */
+  var BASE = session.serverBase
+    || (window.magicHub && window.magicHub.serverBase)
+    || "http://localhost:3000";
+  var WS_URL = BASE.replace(/^http/, "ws") + "/";
 
   var $ = function (id) { return document.getElementById(id); };
   var toastEl = $("toast");
