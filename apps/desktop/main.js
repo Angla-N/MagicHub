@@ -1,102 +1,20 @@
 /**
- * MagicHub 桌面端 · Electron 主进程
+ * MagicHub 客户端（纯前端壳，不内置业务服务器）
  *
  * 职责：
- *  1. 探测空闲端口，用 utilityProcess 启动内置 Node 服务（apps/server，无需独立 node 安装）
- *  2. 创建无边框窗口（自绘标题栏，-webkit-app-region 拖拽）
+ *  1. 创建无边框窗口（自绘标题栏，-webkit-app-region 拖拽）
+ *  2. 加载本地前端页面（login.html / index.html）
  *  3. 通过 preload 暴露窗口控制 API（window.magicHub）
+ *
+ * 业务数据（账号、聊天记录、文件下载）全部由独立的 MagicHub-Server 提供，
+ * 客户端在登录页填写服务器地址（默认本机 http://localhost:3000）。
  */
-const { app, BrowserWindow, ipcMain, utilityProcess } = require("electron");
-const net = require("node:net");
-const http = require("node:http");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("node:path");
 
 app.setName("MagicHub");
 
 let win = null;
-let serverProc = null;
-let serverPort = 3000;
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** 端口是否空闲（无监听则空闲） */
-function portFree(port) {
-  return new Promise((resolve) => {
-    const s = net.createConnection({ port, host: "127.0.0.1" });
-    s.once("connect", () => { s.destroy(); resolve(false); });
-    s.once("error", () => resolve(true));
-  });
-}
-
-/** 探测第一个空闲端口（3000-3010） */
-async function pickPort() {
-  for (let p = 3000; p <= 3010; p++) {
-    if (await portFree(p)) return p;
-  }
-  return 3000;
-}
-
-/** HTTP 探活 */
-function httpOk(port) {
-  return new Promise((resolve) => {
-    const req = http.get({ host: "127.0.0.1", port, path: "/api/plugins", timeout: 1200 }, (res) => {
-      res.resume();
-      resolve(res.statusCode >= 200 && res.statusCode < 500);
-    });
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => { req.destroy(); resolve(false); });
-  });
-}
-
-/** 端口上是否已是 MagicHub 服务器（同机复用，避免多实例各起后端导致消息不互通） */
-function magicHubAlive(port) {
-  return new Promise((resolve) => {
-    const req = http.get({ host: "127.0.0.1", port, path: "/api/plugins", timeout: 1200 }, (res) => {
-      let body = "";
-      res.on("data", (c) => { body += c; });
-      res.on("end", () => {
-        try {
-          const j = JSON.parse(body);
-          resolve(!!j && (j.ok === true || !!j.data));
-        } catch {
-          resolve(false);
-        }
-      });
-    });
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => { req.destroy(); resolve(false); });
-  });
-}
-
-/** 启动内置 Node 服务，等待可访问 */
-async function startServer(port) {
-  const serverDir = app.isPackaged
-    ? path.join(process.resourcesPath, "server") // extraResource 按 basename 落到 resources/
-    : path.join(__dirname, "..", "server");
-  const starter = path.join(__dirname, "starter.js");
-
-  serverProc = utilityProcess.fork(starter, [], {
-    serviceName: "magichub-server",
-    env: {
-      ...process.env,
-      PORT: String(port),
-      MAGICHUB_DATA_DIR: app.getPath("userData"), // 账号数据外置到用户目录
-      MAGICHUB_PLUGINS_ROOT: app.isPackaged
-        ? path.join(process.resourcesPath, "plugins")
-        : path.join(__dirname, "..", "..", "plugins"),
-      MAGICHUB_SERVER_DIR: serverDir,
-      MAGICHUB_LOG: path.join(app.getPath("userData"), "server.log"),
-    },
-  });
-
-  for (let i = 0; i < 50; i++) {
-    await sleep(150);
-    if (await httpOk(port)) return true;
-  }
-  return false;
-}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -112,13 +30,11 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      // 把内置服务地址注入渲染进程（preload 通过 process.argv 读取）
-      additionalArguments: [`--magichub-server-base=http://127.0.0.1:${serverPort}`],
     },
   });
 
   win.once("ready-to-show", () => win.show());
-  // 打开程序默认停在登录页（用户确认登录后才进入主界面），登录成功后再跳转 index.html
+  // 打开程序默认停在登录页（用户确认登录后才进入主界面）
   const webEntry = app.isPackaged
     ? path.join(process.resourcesPath, "web", "login.html")
     : path.join(__dirname, "..", "..", "web", "login.html");
@@ -135,19 +51,7 @@ ipcMain.handle("win:maximize", () => {
 });
 ipcMain.handle("win:close", () => win && win.close());
 
-app.whenReady().then(async () => {
-  // 同机已有一个 MagicHub 实例在 3000 提供服务：直接复用（同一 userData、同一 WS 服务），
-  // 避免第二个实例另起 3001 后端导致两个窗口的 WebSocket 推送互相隔离、消息不实时同步
-  if (await magicHubAlive(3000)) {
-    serverPort = 3000;
-    console.log("[magichub] 检测到已有实例，复用 127.0.0.1:" + serverPort);
-  } else {
-    serverPort = await pickPort();
-    const ok = await startServer(serverPort);
-    if (!ok) {
-      console.error("[magichub] 内置服务未能启动，端口 " + serverPort + " 无法访问");
-    }
-  }
+app.whenReady().then(() => {
   createWindow();
 
   app.on("activate", () => {
@@ -157,10 +61,4 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   app.quit();
-});
-
-app.on("will-quit", () => {
-  if (serverProc && !serverProc.killed) {
-    try { serverProc.kill(); } catch { /* 忽略 */ }
-  }
 });

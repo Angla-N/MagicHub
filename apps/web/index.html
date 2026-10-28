@@ -555,15 +555,25 @@
     area.querySelectorAll(".msg").forEach(function (el) { el.remove(); });
     empty.style.display = "none";
 
+    // 先渲染本地缓存（前端本地保存最近记录，弱网/离线也能立即看到）
+    var cached = readMsgCache(convId);
+    cached.forEach(function (m) { appendMsg(m, m.from === session.username); });
+    if (cached.length) area.scrollTop = area.scrollHeight;
+
     fetch(BASE + "/api/messages?conv=" + encodeURIComponent(convId), { headers: authHeaders() })
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data.ok) {
-          empty.style.display = "";
-          $("emptyText").textContent = (data.error && data.error.message) || "无法加载消息";
+          if (!cached.length) {
+            empty.style.display = "";
+            $("emptyText").textContent = (data.error && data.error.message) || "无法加载消息";
+          }
           return;
         }
         var msgs = data.data.messages || [];
+        writeMsgCache(convId, msgs);
+        // 用服务器最新记录替换缓存气泡，避免重复
+        area.querySelectorAll(".msg").forEach(function (el) { el.remove(); });
         if (msgs.length === 0) {
           empty.style.display = "";
           $("emptyText").textContent = "你们已成为好友，发一条消息打个招呼吧";
@@ -572,11 +582,22 @@
         msgs.forEach(function (m) { appendMsg(m, m.from === session.username); });
         area.scrollTop = area.scrollHeight;
       })
-      .catch(function () { empty.style.display = ""; });
+      .catch(function () { if (!cached.length) empty.style.display = ""; });
 
     var connected = ws && ws.readyState === WebSocket.OPEN;
     $("input").disabled = !connected;
     $("sendBtn").disabled = !connected;
+  }
+
+  /* ===== 消息本地缓存：前端保存最近记录，打开会话先显示缓存再向后端刷新 ===== */
+  function msgCacheKey(convId) { return "mh_msg_cache_" + convId; }
+  function readMsgCache(convId) {
+    try { return JSON.parse(localStorage.getItem(msgCacheKey(convId))) || []; }
+    catch (e) { return []; }
+  }
+  function writeMsgCache(convId, msgs) {
+    try { localStorage.setItem(msgCacheKey(convId), JSON.stringify(msgs.slice(-60))); }
+    catch (e) { /* 容量不足时忽略 */ }
   }
 
   function appendMsg(m, mine) {

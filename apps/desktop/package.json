@@ -1,13 +1,13 @@
 {
-  "name": "magichub-desktop",
+  "name": "magichub-client-app",
   "version": "1.0.0",
-  "description": "MagicHub 桌面端（Electron 壳 + 内置 Node 服务）",
+  "description": "MagicHub-Client：纯前端客户端（H5 页面壳），业务由独立 MagicHub-Server 提供",
   "main": "main.js",
   "author": "MagicHub Team",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-packager . MagicHub --platform=win32 --arch=x64 --icon=../../brand/icon.ico --out=../../dist --overwrite --ignore=\"^\\.vscode\" --prune=true"
+    "pack": "electron-packager . MagicHub-Client --platform=win32 --arch=x64 --icon=../../brand/icon.ico --out=../../dist --overwrite --ignore=\"^\\.vscode\" --prune=true --asar --extraResource=../../apps/web"
   },
   "devDependencies": {
     "electron": "^33.0.0",

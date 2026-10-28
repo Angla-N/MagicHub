@@ -37,7 +37,28 @@
   .server-row svg{width:18px;height:18px;flex:none;color:var(--text-3)}
   .server-row .input{flex:1;min-width:0;background:none;border:none;box-shadow:none;padding:7px 0;font-size:13px;color:var(--text-1)}
   .server-row .input:focus{outline:none}
+  .server-check{flex:none;padding:6px 14px;border-radius:9px;background:rgba(124,58,237,.16);
+    border:1px solid rgba(124,58,237,.45);color:var(--accent-soft);font-size:12px;cursor:pointer;
+    transition:background .2s}
+  .server-check:hover{background:rgba(124,58,237,.28)}
+  .server-check:disabled{opacity:.55;cursor:wait}
   .server-tip{font-size:11px;color:var(--text-3);margin-top:7px;line-height:1.5}
+  /* 服务器验证结果弹窗 */
+  .check-modal-mask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,10,10,.66);backdrop-filter:blur(6px)}
+  .check-modal-mask[hidden]{display:none}
+  .check-modal{width:min(400px,86vw);background:#252526;border:1px solid var(--border);border-radius:16px;
+    padding:26px 26px 20px;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+  .check-modal.ok{border-color:rgba(52,211,153,.4)}
+  .check-modal.err{border-color:rgba(244,63,94,.4)}
+  .check-title{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;color:var(--text-1);margin-bottom:10px}
+  .check-title svg{width:22px;height:22px;flex:none}
+  .check-modal.ok .check-title{color:#6ee7b7}
+  .check-modal.err .check-title{color:#fda4af}
+  .check-body{font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:18px;word-break:break-word}
+  .check-close{width:100%;padding:10px;border-radius:10px;background:var(--grad);color:#fff;border:none;
+    font-size:14px;cursor:pointer}
+  .check-close:hover{filter:brightness(1.1)}
   .auth-card-col{flex:0 0 420px}
   .auth-card{background:rgba(37,37,38,.78);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);
     border-radius:20px;padding:34px 34px 30px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
@@ -90,6 +111,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
           <input class="input" id="server" name="server" autocomplete="off" spellcheck="false"
                  placeholder="http://localhost:3000">
+          <button type="button" class="server-check" id="serverCheck">验证</button>
         </div>
         <div class="server-tip">默认连接本机；连其他机器时填服务器 IP，如 http://192.168.1.100:3000</div>
       </div>
@@ -147,6 +169,15 @@
     </p>
       </div>
     </section>
+  </div>
+</div>
+
+<!-- 服务器验证结果弹窗 -->
+<div class="check-modal-mask" id="checkMask" hidden>
+  <div class="check-modal" id="checkModal">
+    <div class="check-title" id="checkTitle"></div>
+    <div class="check-body" id="checkBody"></div>
+    <button class="check-close" id="checkClose" type="button">知道了</button>
   </div>
 </div>
 
@@ -323,6 +354,41 @@
       }
     } catch (e) { /* 忽略损坏的会话 */ }
   }
+
+  /* ===== 服务器地址验证：探测后端 /api/plugins，弹窗反馈结果 ===== */
+  var checkBtn = document.getElementById("serverCheck");
+  var checkMask = document.getElementById("checkMask");
+  function showCheckModal(ok, title, body) {
+    var modal = document.getElementById("checkModal");
+    modal.classList.toggle("ok", ok);
+    modal.classList.toggle("err", !ok);
+    document.getElementById("checkTitle").innerHTML = ok
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>连接成功'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>连接失败';
+    document.getElementById("checkBody").textContent = body;
+    checkMask.hidden = false;
+  }
+  checkBtn.addEventListener("click", function () {
+    var api = getAPI();
+    checkBtn.disabled = true;
+    checkBtn.textContent = "验证中…";
+    var done = function () { checkBtn.disabled = false; checkBtn.textContent = "验证"; };
+    fetch(api + "/api/plugins", { method: "GET" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) {
+          showCheckModal(true, "", "已成功连接到服务器，「" + api + "」地址没有问题，可以登录使用。");
+        } else {
+          showCheckModal(false, "", "服务器响应异常：请确认「" + api + "」是 MagicHub 服务器。");
+        }
+      })
+      .catch(function () {
+        showCheckModal(false, "", "无法连接到服务器「" + api + "」：请检查地址是否正确、服务器是否已启动。");
+      })
+      .finally(function () { done(); });
+  });
+  checkClose.addEventListener("click", function () { checkMask.hidden = true; });
+  checkMask.addEventListener("click", function (e) { if (e.target === checkMask) checkMask.hidden = true; });
 })();
 </script>
 </body>

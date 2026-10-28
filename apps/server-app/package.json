@@ -1,0 +1,16 @@
+{
+  "name": "magichub-server-app",
+  "version": "1.0.0",
+  "description": "MagicHub-Server：独立业务服务器（账号/聊天记录/文件/插件/WS 推送），无窗口托盘常驻",
+  "main": "main.js",
+  "author": "MagicHub Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . MagicHub-Server --platform=win32 --arch=x64 --icon=../../brand/icon.ico --out=../../dist --overwrite --ignore=\"^\\.vscode\" --prune=true --asar --extraResource=../../apps/server --extraResource=../../plugins --extraResource=../../brand"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}
