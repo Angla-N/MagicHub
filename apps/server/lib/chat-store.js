@@ -4,8 +4,9 @@
  * 数据模型（全部本地 JSON，不用数据库）：
  *  - 好友关系：users.json 每个用户记录内 friends: [username...]（双向同时建立）
  *  - 会话与消息：data/chat.json
- *      { convs: { "<convId>": { id, members: [a,b], messages: [{from,text,ts}] } } }
+ *      { convs: { "<convId>": { id, members: [a,b], messages: [{from,text,ts}], unread: { username: n } } } }
  *  - 会话 id：两个用户名按字典序以 __ 连接（a__b），保证同两人只一个会话
+ *  - 未读：每条消息给会话另一方 unread+1；打开会话调用 markRead 清零
  *
  * 规则（产品需求）：
  *  - 通讯录（GET /api/users）能看到所有已注册用户（含未加好友的），但不能发消息
@@ -111,13 +112,16 @@ export function listConversations(me) {
     const id = convId(me, f.username);
     let conv = chat.convs[id];
     if (!conv) {
-      conv = { id, members: [me, f.username], messages: [] };
+      conv = { id, members: [me, f.username], messages: [], unread: {} };
       chat.convs[id] = conv;
       saveChat(chat);
     }
     const last = conv.messages[conv.messages.length - 1] || null;
-    out.push({ id, peer: f, last });
+    const unread = (conv.unread && conv.unread[me]) || 0;
+    out.push({ id, peer: f, last, unread });
   }
+  // 按最后消息时间降序（活跃会话置顶）
+  out.sort((a, b) => (b.last ? b.last.ts : 0) - (a.last ? a.last.ts : 0));
   return out;
 }
 
@@ -148,8 +152,23 @@ export function addMessage(convIdValue, from, text) {
   const msg = { from, text: text.slice(0, 2000), ts: Date.now() };
   conv.messages.push(msg);
   if (conv.messages.length > 500) conv.messages = conv.messages.slice(-500); // 单会话最多保留 500 条
+  // 未读计数：给会话另一方 +1（打开会话后由 markRead 清零）
+  conv.unread = conv.unread || {};
+  const peer = conv.members.find((m) => m !== from) || null;
+  if (peer) conv.unread[peer] = (conv.unread[peer] || 0) + 1;
   saveChat(chat);
-  return { ok: true, data: { convId: convIdValue, msg } };
+  return { ok: true, data: { convId: convIdValue, msg, peerUnread: peer ? conv.unread[peer] : 0 } };
+}
+
+/** 已读：把我在该会话的未读计数清零 */
+export function markRead(convIdValue, me) {
+  const chat = loadChat();
+  const conv = convOf(chat, convIdValue, me);
+  if (!conv) return { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问" } };
+  conv.unread = conv.unread || {};
+  conv.unread[me] = 0;
+  saveChat(chat);
+  return { ok: true, data: { convId: convIdValue } };
 }
 
 /** 会话另一方（用于 WS 定向推送） */

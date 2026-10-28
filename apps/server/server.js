@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import { ensureStore, register, login, getUser, AVATARS_DIR } from "./lib/user-store.js";
 import {
-  listUsers, listFriends, addFriend, listConversations, getMessages, addMessage, peerOf,
+  listUsers, listFriends, addFriend, listConversations, getMessages, addMessage, peerOf, markRead,
 } from "./lib/chat-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -230,8 +230,8 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
-    // ---- 聊天 API：加好友 / 发消息（POST，需登录） ----
-    if (method === "POST" && (urlPath === "/api/friends/add" || urlPath === "/api/messages")) {
+    // ---- 聊天 API：加好友 / 发消息 / 标记已读（POST，需登录） ----
+    if (method === "POST" && (urlPath === "/api/friends/add" || urlPath === "/api/messages" || urlPath === "/api/conversations/read")) {
       const username = resolveToken(req);
       if (!username) {
         return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
@@ -246,11 +246,16 @@ const httpServer = createServer(async (req, res) => {
       let result;
       if (urlPath === "/api/friends/add") {
         result = addFriend(username, payload.username);
+      } else if (urlPath === "/api/conversations/read") {
+        result = markRead(payload.convId, username);
       } else {
         result = addMessage(payload.convId, username, payload.text);
         if (result.ok) {
           const peer = peerOf(payload.convId, username);
-          if (peer) pushToPeer(peer, { type: "message", data: { convId: payload.convId, msg: result.data.msg } });
+          if (peer) pushToPeer(peer, {
+            type: "message",
+            data: { convId: payload.convId, msg: result.data.msg, unread: result.data.peerUnread },
+          });
         }
       }
       return sendJson(res, result.ok ? 200 : 400, result);

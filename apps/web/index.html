@@ -92,7 +92,7 @@
   <aside class="list-pane">
     <div class="list-head">
       <h3>会话</h3>
-      <div class="search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input placeholder="搜索会话或消息"></div>
+      <div class="search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input id="convSearch" placeholder="搜索会话或消息"></div>
     </div>
     <div class="list" id="chatList"></div>
   </aside>
@@ -103,12 +103,21 @@
     <!-- 聊天视图 -->
     <div class="chat-view" id="chatView" style="display:flex;flex-direction:column;min-width:0;flex:1">
       <div class="chat-head">
-        <span class="dot"></span>
-        <h4 id="chatName">请选择会话</h4>
+        <button class="peer-btn" id="peerBtn" title="查看好友资料">
+          <span class="p-av" id="peerAv"></span>
+          <span class="dot"></span>
+          <h4 id="chatName">请选择会话</h4>
+        </button>
         <div class="tools">
+          <button class="icon-btn" id="msgSearchBtn" title="搜索消息"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg></button>
           <button class="icon-btn" title="更多"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
         </div>
         <div class="status" id="status"><i></i><span id="statusText">未连接</span></div>
+      </div>
+      <div class="msg-search" id="msgSearch">
+        <input id="msgSearchInput" placeholder="搜索当前会话的消息…">
+        <span class="m-count" id="msgSearchCount"></span>
+        <button class="icon-btn" id="msgSearchClose" title="关闭搜索"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <div class="msg-area" id="msgArea">
         <div class="empty" id="emptyTip">
@@ -153,6 +162,20 @@
 </div>
 
 <div id="toast" role="status"></div>
+
+<!-- 好友资料卡弹窗 -->
+<div class="modal-mask" id="cardMask" hidden>
+  <div class="card-modal">
+    <div class="card-avatar" id="cardAvatar"></div>
+    <div class="card-name" id="cardName"></div>
+    <div class="card-acc" id="cardAcc"></div>
+    <div class="card-tag">已是好友</div>
+    <div class="card-actions">
+      <button class="add-btn" id="cardMsgBtn">发消息</button>
+      <button class="add-btn" id="cardClose" style="background:var(--surface);color:var(--text-2);border:1px solid var(--border)">关闭</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -348,10 +371,8 @@
   /* ===== 工具：头像与时间 ===== */
   function avatarHTML(u) {
     var letter = (u.displayName || u.username).charAt(0).toUpperCase();
-    if (u.avatar) {
-      return '<span class="avatar" style="background:var(--grad)"><img src="' + BASE + u.avatar + '" alt="" onerror="this.parentNode.textContent=\'' + letter + '\'"></span>';
-    }
-    return '<span class="avatar" style="background:var(--grad)">' + letter + '</span>';
+    return '<span class="avatar" style="background:var(--grad)"><span class="av-fallback">' + letter + '</span>' +
+      (u.avatar ? '<img src="' + BASE + u.avatar + '" alt="" onerror="this.remove()">' : '') + '</span>';
   }
   function fmtTime(ts) {
     if (!ts) return "";
@@ -364,49 +385,106 @@
     if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + "月" + d.getDate() + "日";
     return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
   }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function escapeReg(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
 
-  /* ===== 会话列表（好友会话，最后消息预览） ===== */
+  /* ===== 会话列表（好友会话，最后消息预览 + 未读红点 + 搜索过滤） ===== */
   var chatList = $("chatList");
   var activeConv = null;
-  var convMeta = {}; // convId -> { id, peer }
+  var convMeta = {}; // convId -> { id, peer, unread }
+  var lastConvs = [];
+  var convSearchKw = "";
+
+  function renderConvs() {
+    var kw = convSearchKw;
+    var convs = lastConvs;
+    convMeta = {};
+    chatList.innerHTML = "";
+    var shown = convs.filter(function (c) {
+      if (!kw) return true;
+      var name = (c.peer.displayName || c.peer.username).toLowerCase();
+      var last = c.last ? c.last.text.toLowerCase() : "";
+      return name.indexOf(kw) >= 0 || last.indexOf(kw) >= 0;
+    });
+    if (shown.length === 0) {
+      chatList.innerHTML = '<div class="c-prev" style="padding:16px;text-align:center;color:var(--text-3)">' +
+        (convs.length === 0 ? "暂无会话<br>去「通讯录」添加好友" : "没有匹配的会话或消息") + '</div>';
+      return;
+    }
+    shown.forEach(function (c) {
+      convMeta[c.id] = c;
+      var el = document.createElement("div");
+      el.className = "chat-item" + (c.id === activeConv ? " on" : "");
+      el.setAttribute("data-conv", c.id);
+      var last = c.last ? (c.last.from === session.username ? "我：" : "") + c.last.text : "你们已成为好友，开始聊天吧";
+      var badgeHtml = c.unread > 0 ? '<span class="badge">' + (c.unread > 99 ? "99+" : c.unread) + '</span>' : "";
+      el.innerHTML = '<span class="av-wrap">' + avatarHTML(c.peer) + badgeHtml + '</span>' +
+        '<div class="c-main"><div class="c-row"><span class="c-name">' + (c.peer.displayName || c.peer.username) + '</span>' +
+        '<span class="c-time">' + fmtTime(c.last && c.last.ts) + '</span></div>' +
+        '<div class="c-prev"></div></div>';
+      el.querySelector(".c-prev").textContent = last;
+      el.addEventListener("click", function () { openConv(c.id); });
+      chatList.appendChild(el);
+    });
+  }
+
+  function updateConvBadge(convId, n) {
+    var el = chatList.querySelector('[data-conv="' + convId + '"]');
+    if (!el) return;
+    var wrap = el.querySelector(".av-wrap");
+    var badge = el.querySelector(".badge");
+    if (n > 0) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "badge";
+        wrap.appendChild(badge);
+      }
+      badge.textContent = n > 99 ? "99+" : n;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
 
   function loadConvs() {
     fetch(BASE + "/api/conversations", { headers: authHeaders() })
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        var convs = (data.ok && data.data && data.data.conversations) || [];
-        convMeta = {};
-        chatList.innerHTML = "";
-        if (convs.length === 0) {
-          chatList.innerHTML = '<div class="c-prev" style="padding:16px;text-align:center;color:var(--text-3)">暂无会话<br>去「通讯录」添加好友</div>';
-          return;
-        }
-        convs.forEach(function (c) {
-          convMeta[c.id] = c;
-          var el = document.createElement("div");
-          el.className = "chat-item" + (c.id === activeConv ? " on" : "");
-          el.setAttribute("data-conv", c.id);
-          var last = c.last ? (c.last.from === session.username ? "我：" : "") + c.last.text : "你们已成为好友，开始聊天吧";
-          el.innerHTML = avatarHTML(c.peer) +
-            '<div class="c-main"><div class="c-row"><span class="c-name">' + (c.peer.displayName || c.peer.username) + '</span>' +
-            '<span class="c-time">' + fmtTime(c.last && c.last.ts) + '</span></div>' +
-            '<div class="c-prev"></div></div>';
-          el.querySelector(".c-prev").textContent = last;
-          el.addEventListener("click", function () { openConv(c.id); });
-          chatList.appendChild(el);
-        });
+        lastConvs = (data.ok && data.data && data.data.conversations) || [];
+        renderConvs();
       })
       .catch(function () { /* 后端未启动 */ });
   }
 
-  /* ===== 打开会话：加载历史 + 可发送 ===== */
+  $("convSearch").addEventListener("input", function () {
+    convSearchKw = this.value.trim().toLowerCase();
+    renderConvs();
+  });
+
+  /* ===== 打开会话：标记已读 + 加载历史 + 可发送 ===== */
   function openConv(convId) {
     activeConv = convId;
     Array.prototype.forEach.call(chatList.children, function (el) {
       el.classList.toggle("on", el.getAttribute("data-conv") === convId);
     });
     var meta = convMeta[convId];
-    if (meta) $("chatName").textContent = meta.peer.displayName || meta.peer.username;
+    if (meta) {
+      $("chatName").textContent = meta.peer.displayName || meta.peer.username;
+      $("peerAv").innerHTML = avatarHTML(meta.peer);
+      // 标记已读：清零未读角标
+      if (meta.unread > 0) {
+        meta.unread = 0;
+        updateConvBadge(convId, 0);
+        fetch(BASE + "/api/conversations/read", {
+          method: "POST",
+          headers: authHeaders(true),
+          body: JSON.stringify({ convId: convId }),
+        }).catch(function () { /* 失败下次再清 */ });
+      }
+    }
 
     var area = $("msgArea");
     var empty = $("emptyTip");
@@ -453,6 +531,8 @@
     div.appendChild(time);
     area.appendChild(div);
     area.scrollTop = area.scrollHeight;
+    // 消息搜索激活时对新消息同步过滤
+    if (msgSearchInput && msgSearchInput.value.trim()) applyMsgSearch();
   }
 
   /* ===== 发送消息 ===== */
@@ -481,6 +561,55 @@
   $("input").addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   });
+
+  /* ===== 好友资料卡弹窗 ===== */
+  var cardMask = $("cardMask");
+  function openCard() {
+    if (!activeConv || !convMeta[activeConv]) return;
+    var p = convMeta[activeConv].peer;
+    $("cardAvatar").innerHTML = avatarHTML(p);
+    $("cardName").textContent = p.displayName || p.username;
+    $("cardAcc").textContent = "账号：" + p.username;
+    cardMask.hidden = false;
+  }
+  $("peerBtn").addEventListener("click", openCard);
+  $("cardClose").addEventListener("click", function () { cardMask.hidden = true; });
+  $("cardMsgBtn").addEventListener("click", function () { cardMask.hidden = true; });
+  cardMask.addEventListener("click", function (e) { if (e.target === cardMask) cardMask.hidden = true; });
+
+  /* ===== 消息搜索（当前会话内过滤 + 高亮） ===== */
+  var msgSearch = $("msgSearch");
+  var msgSearchInput = $("msgSearchInput");
+  var msgSearchCount = $("msgSearchCount");
+  function applyMsgSearch() {
+    var kw = msgSearchInput.value.trim().toLowerCase();
+    var count = 0;
+    Array.prototype.forEach.call($("msgArea").querySelectorAll(".msg"), function (m) {
+      var bubble = m.querySelector(".bubble");
+      var text = bubble ? bubble.textContent : "";
+      var hit = !!kw && text.toLowerCase().indexOf(kw) >= 0;
+      m.style.display = hit ? "" : "none";
+      if (hit) count++;
+      if (bubble) {
+        bubble.innerHTML = escapeHtml(text);
+        if (kw) {
+          bubble.innerHTML = bubble.innerHTML.replace(new RegExp(escapeReg(kw), "gi"),
+            function (x) { return '<span class="hl">' + x + '</span>'; });
+        }
+      }
+    });
+    msgSearchCount.textContent = kw ? count + " 条匹配" : "";
+  }
+  $("msgSearchBtn").addEventListener("click", function () {
+    msgSearch.style.display = "flex";
+    msgSearchInput.focus();
+  });
+  $("msgSearchClose").addEventListener("click", function () {
+    msgSearch.style.display = "none";
+    msgSearchInput.value = "";
+    applyMsgSearch();
+  });
+  msgSearchInput.addEventListener("input", applyMsgSearch);
 
   /* ===== 通讯录：所有用户（只能查看/加好友，不能发消息） ===== */
   var userListEl = $("userList");
@@ -604,7 +733,23 @@
         var d = frame.data || {};
         if (activeConv && d.convId === activeConv) {
           appendMsg(d.msg, false);
+          // 正在看该会话：服务端计数置 0（若对方刚发来）
+          if (convMeta[d.convId] && convMeta[d.convId].unread > 0) {
+            convMeta[d.convId].unread = 0;
+            updateConvBadge(d.convId, 0);
+          }
+          fetch(BASE + "/api/conversations/read", {
+            method: "POST",
+            headers: authHeaders(true),
+            body: JSON.stringify({ convId: d.convId }),
+          }).catch(function () {});
+          loadConvs();
         } else {
+          // 非当前会话：未读 +1 并显示角标
+          if (convMeta[d.convId]) {
+            convMeta[d.convId].unread = (convMeta[d.convId].unread || 0) + 1;
+            updateConvBadge(d.convId, convMeta[d.convId].unread);
+          }
           toast("收到新消息");
           loadConvs();
         }
