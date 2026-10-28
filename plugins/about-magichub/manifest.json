@@ -1,4 +1,5 @@
 {
+  "id": "about-magichub",
   "name": "关于 MagicHub",
   "version": "1.0.0",
   "description": "一份 HTML 页面，介绍 MagicHub 的产品定位、功能、技术架构与当前进度",

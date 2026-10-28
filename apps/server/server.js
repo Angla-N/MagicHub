@@ -19,9 +19,10 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { extname, join, normalize, sep } from "node:path";
+import { extname, join, normalize, sep, basename } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
@@ -32,7 +33,8 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
-const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 仓库根 plugins/（Electron 打包场景由主进程注入）
+const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 插件市场仓库（打包场景由主进程注入到数据目录）
+const SEVEN_ZIP = process.env.MAGICHUB_7Z || ""; // 7za.exe（用于插件包解压/打包）
 const UPLOADS_DIR = join(DATA_DIR, "uploads");
 const MAX_BODY = 12 * 1024 * 1024; // 请求体上限 12MB（头像 + 图片/文件消息 base64）
 
@@ -60,12 +62,79 @@ function resolveToken(req) {
 
 ensureStore();
 
-/* ================= 插件系统 ================= */
+/* ================= 插件市场 ================= */
 
 /**
- * 扫描 plugins/<plugin-id>/manifest.json，返回插件元信息列表。
- * 插件 = plugins/ 下一个文件夹 + manifest.json，放入即被发现（无需注册）。
+ * 插件目录模型（data/plugins/<id>/）：
+ *  - manifest.json  插件声明（id/name/version/entry/icon/description…）
+ *  - meta.json      市场元信息 { author, public, uploadedAt }（上传时写入，内置插件缺省 system/公开）
+ *  - <id>.7z        原始安装包（客户端可下载；内置插件下载时按需现场打包）
+ *  - 其余文件       插件本体（解压后的静态资源）
  */
+const PLUGIN_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
+function pluginMetaPath(id) { return join(PLUGINS_ROOT, id, "meta.json"); }
+function pluginArchivePath(id) { return join(PLUGINS_ROOT, id, id + ".7z"); }
+
+/** 读取插件市场元信息（默认：内置/公开） */
+function readPluginMeta(id) {
+  const mf = pluginMetaPath(id);
+  if (existsSync(mf)) {
+    try { return JSON.parse(readFileSync(mf, "utf8")); } catch { /* 忽略 */ }
+  }
+  return { author: "system", public: true, uploadedAt: 0 };
+}
+
+/** 校验插件包解压结果：manifest.json 必须存在且合法，id 必须安全合法 */
+function validateExtracted(dir, expectedId) {
+  const mf = join(dir, "manifest.json");
+  if (!existsSync(mf)) return { ok: false, error: "压缩包内缺少 manifest.json（请用插件打包工具生成）" };
+  let m;
+  try { m = JSON.parse(readFileSync(mf, "utf8")); } catch {
+    return { ok: false, error: "manifest.json 不是合法 JSON" };
+  }
+  const id = String(m.id || "");
+  if (!PLUGIN_ID_RE.test(id)) return { ok: false, error: "manifest.id 必须为 1-64 位字母/数字/_/-" };
+  if (expectedId && id !== expectedId) return { ok: false, error: "插件 id 与文件名不一致：" + id };
+  if (!String(m.name || "").trim()) return { ok: false, error: "manifest.name 不能为空" };
+  if (!String(m.version || "").trim()) return { ok: false, error: "manifest.version 不能为空" };
+  const entry = String(m.entry || "index.html");
+  const entryFile = join(dir, entry);
+  if (!existsSync(entryFile) || !statSync(entryFile).isFile()) {
+    return { ok: false, error: "入口文件不存在：" + entry };
+  }
+  return { ok: true, manifest: m };
+}
+
+/** 用 7za 解压 <pack> 到 <dir>（-y 覆盖），返回是否成功 */
+function extractArchive(pack, dir) {
+  return new Promise((resolve) => {
+    if (!SEVEN_ZIP || !existsSync(SEVEN_ZIP)) {
+      resolve({ ok: false, error: "服务器未配置解压工具（7za.exe）" });
+      return;
+    }
+    execFile(SEVEN_ZIP, ["x", pack, `-o${dir}`, "-y", "-bso0", "-bsp0"], { windowsHide: true }, (err) => {
+      if (err) resolve({ ok: false, error: "解压失败：" + err.message });
+      else resolve({ ok: true });
+    });
+  });
+}
+
+/** 用 7za 打包插件目录为 <pack>（下载内置插件时现场生成） */
+function createArchive(dir, pack) {
+  return new Promise((resolve) => {
+    if (!SEVEN_ZIP || !existsSync(SEVEN_ZIP)) {
+      resolve({ ok: false, error: "服务器未配置压缩工具（7za.exe）" });
+      return;
+    }
+    execFile(SEVEN_ZIP, ["a", "-t7z", "-mx=5", "-y", "-bso0", "-bsp0", pack, join(dir, "*")], { windowsHide: true }, (err) => {
+      if (err) resolve({ ok: false, error: "打包失败：" + err.message });
+      else resolve({ ok: true });
+    });
+  });
+}
+
+/** 扫描 data/plugins/<plugin-id>/manifest.json，返回市场列表（含作者/公开状态） */
 function listPlugins() {
   if (!existsSync(PLUGINS_ROOT)) return [];
   const out = [];
@@ -76,6 +145,7 @@ function listPlugins() {
     if (!existsSync(mf)) continue;
     try {
       const m = JSON.parse(readFileSync(mf, "utf8"));
+      const meta = readPluginMeta(dir);
       out.push({
         id: dir,
         name: m.name || dir,
@@ -83,12 +153,138 @@ function listPlugins() {
         description: m.description || "",
         entry: m.entry || "index.html",
         icon: m.icon || "",
+        author: meta.author || "system",
+        public: meta.public !== false,
+        uploadedAt: meta.uploadedAt || 0,
+        hasArchive: existsSync(pluginArchivePath(dir)),
       });
     } catch (err) {
       console.error(`[plugins] ${dir}/manifest.json 解析失败: ${err.message}`);
     }
   }
   return out;
+}
+
+/** 上传插件（7Z 包）：校验 → 解压 → 登记 meta.json → 入库 */
+async function uploadPlugin(username, payload) {
+  const name = String(payload.name || "");
+  if (!/\.7z$/i.test(name)) return { ok: false, error: { code: "BAD_PACKAGE", message: "请上传 .7z 格式的插件包" } };
+  const buf = decodeBase64Payload(payload.data);
+  if (!buf.length) return { ok: false, error: { code: "BAD_PACKAGE", message: "包内容为空" } };
+  if (buf.length > 10 * 1024 * 1024) return { ok: false, error: { code: "TOO_LARGE", message: "插件包不能超过 10MB" } };
+
+  const tmpRoot = join(DATA_DIR, ".plugin-tmp");
+  mkdirSync(tmpRoot, { recursive: true });
+  const tag = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+  const packPath = join(tmpRoot, tag + ".7z");
+  const outDir = join(tmpRoot, tag);
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(packPath, buf);
+
+  const ex = await extractArchive(packPath, outDir);
+  if (!ex.ok) {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    return { ok: false, error: { code: "BAD_PACKAGE", message: ex.error } };
+  }
+  // 解压结果可能在子目录（不同打包工具的目录结构不同）→ 向下最多 2 层找含 manifest.json 的目录
+  let root = outDir;
+  try {
+    for (let depth = 0; depth < 2; depth++) {
+      if (existsSync(join(root, "manifest.json"))) break;
+      const sub = readdirSync(root).find((d) => existsSync(join(root, d, "manifest.json")));
+      if (!sub) break;
+      root = join(root, sub);
+    }
+  } catch { /* 保持 root */ }
+
+  const v = validateExtracted(root);
+  if (!v.ok) {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    return { ok: false, error: { code: "BAD_PACKAGE", message: v.error } };
+  }
+  const id = v.manifest.id;
+  const dest = join(PLUGINS_ROOT, id);
+  if (existsSync(dest)) {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    return { ok: false, error: { code: "EXISTS", message: "插件「" + id + "」已存在（上传者可在插件市场删除后重新上传）" } };
+  }
+  mkdirSync(PLUGINS_ROOT, { recursive: true });
+  try {
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(dest, { recursive: true });
+    if (root !== outDir) {
+      // 子目录结构：把子目录内容移动到最终位置
+      mkdirSync(dest, { recursive: true });
+      for (const item of readdirSync(root)) {
+        const s = join(root, item);
+        const t = join(dest, item);
+        if (statSync(s).isDirectory()) {
+          // 递归拷贝
+          mkdirSync(t, { recursive: true });
+          for (const f of readdirSync(s)) copyFileSync(join(s, f), join(t, f));
+        } else {
+          copyFileSync(s, t);
+        }
+      }
+    } else {
+      copyFileSync(join(outDir, "manifest.json"), join(dest, "manifest.json"));
+      for (const item of readdirSync(outDir)) {
+        if (item === "manifest.json") continue;
+        const s = join(outDir, item);
+        const t = join(dest, item);
+        if (statSync(s).isDirectory()) {
+          mkdirSync(t, { recursive: true });
+          for (const f of readdirSync(s)) copyFileSync(join(s, f), join(t, f));
+        } else {
+          copyFileSync(s, t);
+        }
+      }
+    }
+    copyFileSync(packPath, pluginArchivePath(id));
+    writeFileSync(pluginMetaPath(id), JSON.stringify({ author: username, public: false, uploadedAt: Date.now() }, null, 2));
+  } catch (err) {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    return { ok: false, error: { code: "INTERNAL", message: "插件入库失败：" + err.message } };
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+  console.log(`[plugins] ${username} 上传插件: ${id} v${v.manifest.version}`);
+  return { ok: true, data: { id, name: v.manifest.name, version: v.manifest.version } };
+}
+
+/** 删除插件（仅上传者 / system 内置插件不可删） */
+function removePlugin(id, username) {
+  if (!PLUGIN_ID_RE.test(id)) return { ok: false, error: { code: "BAD_ID", message: "插件 id 不合法" } };
+  const dir = join(PLUGINS_ROOT, id);
+  if (!existsSync(dir)) return { ok: false, error: { code: "NOT_FOUND", message: "插件不存在" } };
+  const meta = readPluginMeta(id);
+  if (meta.author === "system") return { ok: false, error: { code: "FORBIDDEN", message: "内置插件不可删除" } };
+  if (meta.author !== username) return { ok: false, error: { code: "FORBIDDEN", message: "只能删除自己上传的插件" } };
+  rmSync(dir, { recursive: true, force: true });
+  console.log(`[plugins] ${username} 删除插件: ${id}`);
+  return { ok: true };
+}
+
+/** 设置插件公开状态（仅上传者） */
+function setPluginVisibility(id, username, isPublic) {
+  if (!PLUGIN_ID_RE.test(id)) return { ok: false, error: { code: "BAD_ID", message: "插件 id 不合法" } };
+  const dir = join(PLUGINS_ROOT, id);
+  if (!existsSync(dir)) return { ok: false, error: { code: "NOT_FOUND", message: "插件不存在" } };
+  const meta = readPluginMeta(id);
+  if (meta.author !== username) return { ok: false, error: { code: "FORBIDDEN", message: "只能管理自己上传的插件" } };
+  meta.public = !!isPublic;
+  writeFileSync(pluginMetaPath(id), JSON.stringify(meta, null, 2));
+  return { ok: true, data: { public: meta.public } };
+}
+
+/** 准备插件安装包（有 7z 直接用；没有则现场打包） */
+async function ensureArchive(id) {
+  const dir = join(PLUGINS_ROOT, id);
+  if (!existsSync(dir)) return null;
+  const pack = pluginArchivePath(id);
+  if (existsSync(pack)) return pack;
+  const r = await createArchive(dir, pack);
+  return r.ok ? pack : null;
 }
 
 /** 解析 /plugins/<id>/<path> 为插件目录内的真实文件路径（防路径穿越） */
@@ -338,6 +534,52 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
+    // ---- 插件市场：上传 / 公开设置（POST，需登录）----
+    if (urlPath === "/api/plugins/upload" && method === "POST") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      let payload = {};
+      try {
+        const b = await readBody(req);
+        if (!b.ok) {
+          return sendJson(res, 413, { ok: false, error: { code: "BODY_TOO_LARGE", message: "请求体过大" } });
+        }
+        payload = JSON.parse(b.raw || "{}");
+      } catch {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
+      }
+      const result = await uploadPlugin(username, payload);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    if (method === "POST" && urlPath.startsWith("/api/plugins/") && urlPath.endsWith("/visibility")) {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      const id = urlPath.slice("/api/plugins/".length, -"/visibility".length);
+      let payload = {};
+      try {
+        const b = await readBody(req);
+        payload = JSON.parse((b && b.raw) || "{}");
+      } catch { /* payload 保持空 */ }
+      const result = setPluginVisibility(id, username, payload.public);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ---- 插件市场：删除（DELETE，需登录，仅作者）----
+    if (method === "DELETE" && urlPath.startsWith("/api/plugins/")) {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      const id = urlPath.slice("/api/plugins/".length);
+      const result = removePlugin(id, username);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
     if (method !== "GET" && method !== "HEAD") {
       return sendJson(res, 405, { ok: false, error: { code: "METHOD_NOT_ALLOWED", message: "不支持的方法" } });
     }
@@ -378,9 +620,30 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, data: { messages } });
     }
 
-    // ---- 插件 API：插件列表 ----
+    // ---- 插件市场：列表 / 下载安装包 ----
     if (urlPath === "/api/plugins") {
-      return sendJson(res, 200, { ok: true, data: { plugins: listPlugins() } });
+      const username = resolveToken(req);
+      const plugins = listPlugins().map((p) => ({ ...p, isOwner: !!username && p.author === username }));
+      return sendJson(res, 200, { ok: true, data: { plugins } });
+    }
+    if (urlPath.startsWith("/api/plugins/") && urlPath.endsWith("/download")) {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      const id = urlPath.slice("/api/plugins/".length, -"/download".length);
+      const pack = await ensureArchive(id);
+      if (!pack) {
+        return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "插件不存在" } });
+      }
+      const body = await readFile(pack);
+      res.writeHead(200, {
+        "Content-Type": "application/x-7z-compressed",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(basename(pack))}"`,
+        "Content-Length": body.length,
+      });
+      res.end(body);
+      return;
     }
 
     // ---- 插件资源：/plugins/<id>/<path> ----

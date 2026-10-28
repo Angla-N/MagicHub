@@ -263,7 +263,24 @@ declare namespace magicHub {
 | 三：插件系统 | PluginHost、贡献点、API 注入、新闻推送示例    | 安装插件→新闻入口出现；卸载→入口消失      |
 | 四：发布优化 | Electron 打包、性能压测、安全审计           | 达成交付指标（<1s 送达、99.9% 可用性） |
 
+### 6.1 插件市场（已实现）
 
+* **服务器侧（MagicHub-Server）**：插件市场根目录 = Server.exe 同目录 `data/plugins/`（便携，不占 C 盘）。
+  * 首次启动自动把内置插件（`resources/plugins/`）复制进市场（已存在不覆盖）。
+  * 上传：仅接受 `.7z`（≤10MB），用内置 7za.exe 解压（自动向下最多 2 层找 manifest.json），校验
+    `id/name/version/entry` 与入口文件后入库，同时保存 `.7z` 副本与 `meta.json`（author / public / uploadedAt）。
+  * API：`GET /api/plugins`（带 isOwner）、`GET /api/plugins/<id>/download`、`POST /api/plugins/upload`、
+    `POST /api/plugins/<id>/visibility`、`DELETE /api/plugins/<id>`（仅作者，system 内置禁删）。
+  * 下载优先返回已存 `.7z`，否则现场用 7za 打包含 manifest 的目录。
+* **客户端侧（MagicHub-Client）**：本地插件根目录 = Client.exe 同目录 `data/plugins/`。
+  * 市场下载 `.7z` → 主进程 7za 解压 → 校验 manifest 且 id 一致 → 写入本地插件目录 → 自动加载
+    （侧栏插件区、设置界面「已启用插件」即时更新）。
+  * 卸载即删除本地插件目录。
+* **打包工具 `tools/plugin-pack.py`**：校验插件格式（id 1-64 位、必填字段、入口/图标存在）→ 在插件目录内
+  打 `.7z`（保证包根就是插件内容）→ `--init` 生成 manifest 模板，`--list` 只校验。
+  `python plugin-pack.py <插件目录> [-o 输出.7z] [--init] [--list]`。
+* **后台驻留**：客户端默认开启——关闭窗口最小化到托盘（设置界面「通用·后台驻留」开关可关，默认 true）；
+  服务器无窗口托盘常驻。
 
 ***
 

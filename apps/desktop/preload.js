@@ -1,6 +1,6 @@
 /**
  * MagicHub 桌面端 · preload
- * 通过 contextBridge 暴露安全的窗口控制 API 与内置服务地址（window.magicHub）
+ * 通过 contextBridge 暴露安全的窗口控制 / 后台驻留 / 本地插件管理 API（window.magicHub）
  */
 const { contextBridge, ipcRenderer } = require("electron");
 
@@ -14,4 +14,11 @@ contextBridge.exposeInMainWorld("magicHub", {
   minimize: () => ipcRenderer.invoke("win:minimize"),
   maximize: () => ipcRenderer.invoke("win:maximize"),
   close: () => ipcRenderer.invoke("win:close"),
+  /* 后台驻留 */
+  getKeepInBackground: () => ipcRenderer.invoke("settings:getKeepInBackground"),
+  setKeepInBackground: (val) => ipcRenderer.invoke("settings:setKeepInBackground", !!val),
+  /* 本地插件 */
+  listLocalPlugins: () => ipcRenderer.invoke("plugins:listLocal"),
+  installPlugin: (id, buffer) => ipcRenderer.invoke("plugins:install", { id, buffer }),
+  uninstallPlugin: (id) => ipcRenderer.invoke("plugins:uninstall", id),
 });

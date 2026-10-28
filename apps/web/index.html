@@ -67,6 +67,47 @@
     background:var(--bg-soft);color:var(--text-1);font-size:13px;box-sizing:border-box}
   .pwd-field .input:focus{outline:none;border-color:rgba(167,139,250,.55);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
   .pwd-err{width:100%;min-height:18px;font-size:12px;color:#fb7185;margin-bottom:6px}
+  /* 开关（后台驻留） */
+  .switch{position:relative;display:inline-block;width:40px;height:22px;flex:none;cursor:pointer}
+  .switch input{opacity:0;width:0;height:0}
+  .switch .slider{position:absolute;inset:0;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:999px;transition:.2s}
+  .switch .slider:before{content:"";position:absolute;width:16px;height:16px;border-radius:50%;left:2px;top:2px;
+    background:#9ca3af;transition:.2s}
+  .switch input:checked + .slider{background:rgba(124,58,237,.35);border-color:rgba(167,139,250,.6)}
+  .switch input:checked + .slider:before{transform:translateX(18px);background:var(--grad)}
+
+  /* —— 插件市场视图 —— */
+  .market-view{display:none;flex-direction:column;min-width:0;background:var(--bg-soft);flex:1}
+  .market-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none;
+    display:flex;align-items:center}
+  .market-head .tools{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .market-body{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+  .market-empty{color:var(--text-3);font-size:13px;text-align:center;padding:48px 0}
+  .mkt-card{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:14px 16px;transition:border-color .2s}
+  .mkt-card:hover{border-color:rgba(167,139,250,.4)}
+  .mkt-icon{width:44px;height:44px;border-radius:11px;background:var(--grad);color:#fff;font-weight:800;font-size:18px;
+    display:grid;place-items:center;flex:none;overflow:hidden}
+  .mkt-icon img{width:100%;height:100%;object-fit:cover}
+  .mkt-info{flex:1;min-width:0}
+  .mkt-info b{display:block;font-size:14px;color:var(--text-1)}
+  .mkt-info .mkt-meta{font-size:11px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mkt-info .mkt-desc{font-size:12px;color:var(--text-2);margin-top:4px;line-height:1.5;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .mkt-actions{flex:none;display:flex;gap:8px;align-items:center}
+  .mkt-btn{padding:6px 14px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);
+    color:var(--text-1);font-size:12px;cursor:pointer;transition:.18s;white-space:nowrap}
+  .mkt-btn:hover{background:rgba(124,58,237,.2);border-color:rgba(167,139,250,.5);color:var(--accent-soft)}
+  .mkt-btn.primary{background:var(--grad);border:none;color:#fff}
+  .mkt-btn.primary:hover{filter:brightness(1.12)}
+  .mkt-btn.danger{color:#fb7185;border-color:rgba(244,63,94,.4)}
+  .mkt-btn.danger:hover{background:rgba(244,63,94,.15)}
+  .mkt-btn:disabled{opacity:.45;cursor:default}
+  .mkt-badge{font-size:11px;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .mkt-badge.pub{color:#6ee7b7;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3)}
+  .mkt-badge.priv{color:var(--text-3);background:rgba(255,255,255,.05);border:1px solid var(--border)}
+  .mkt-badge.inst{color:var(--accent-soft);background:rgba(124,58,237,.14);border:1px solid rgba(167,139,250,.4)}
 
   /* —— 通讯录视图（所有用户，只能查看与加好友，不能发消息） —— */
   .contacts-view{display:none;flex-direction:column;min-width:0;background:var(--bg-soft);flex:1}
@@ -112,10 +153,11 @@
 
     <span class="rail-sep"></span>
 
-    <!-- 插件区：由 /api/plugins 动态渲染 -->
+    <!-- 插件区：由本地已装插件动态渲染 -->
     <div class="rail-plugins" id="pluginRail"></div>
     <span class="rail-sep" id="pluginSep" hidden></span>
 
+    <button class="rail-item" data-view="market" title="插件市场"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16M4 8l1.2-4h13.6L20 8M4 8v12h16V8M10 12h4"/></svg></button>
     <button class="rail-item" data-view="settings" title="设置"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.3 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2l.3 2.6h4l.3-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg></button>
   </nav>
 
@@ -208,10 +250,30 @@
           <div class="set-row"><span class="set-label">服务器地址</span><span class="set-val mono" id="setServer"></span></div>
         </div>
         <div class="set-card">
+          <h4 class="set-card-title">通用</h4>
+          <div class="set-row" id="keepRow">
+            <span class="set-label">后台驻留</span>
+            <span class="set-val">关闭窗口时最小化到系统托盘（快速启动）</span>
+            <label class="switch" id="keepSwitch"><input type="checkbox" id="keepCheck"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="set-card">
           <h4 class="set-card-title">已启用插件</h4>
           <div class="set-plugins" id="setPlugins"></div>
         </div>
       </div>
+    </div>
+
+    <!-- 插件市场视图 -->
+    <div class="market-view" id="marketView">
+      <div class="market-head">
+        <h4>插件市场</h4>
+        <div class="tools">
+          <button class="icon-btn" id="pluginUploadBtn" title="上传 .7z 插件包"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v5h16v-5"/></svg></button>
+        </div>
+      </div>
+      <div class="market-body" id="marketBody"></div>
+      <input type="file" id="pluginPackInput" accept=".7z" hidden>
     </div>
   </main>
   </div><!-- /app-main -->
@@ -406,6 +468,7 @@
     contactsView.style.display = "none";
     pluginView.style.display = "none";
     phView.style.display = "none";
+    $("marketView").style.display = "none";
   }
   function showChat() {
     hideAllViews();
@@ -433,16 +496,23 @@
     $("setName").textContent = session.displayName || session.username;
     $("setUsername").textContent = session.username;
     $("setServer").textContent = BASE;
-    // 已启用插件列表
+    // 后台驻留开关（仅桌面端）
+    var keepRow = $("keepRow");
+    if (window.magicHub && window.magicHub.getKeepInBackground) {
+      keepRow.style.display = "flex";
+      window.magicHub.getKeepInBackground().then(function (v) { $("keepCheck").checked = !!v; });
+    } else {
+      keepRow.style.display = "none";
+    }
+    // 已启用插件列表（本地已装）
     var box = $("setPlugins");
-    var keys = Object.keys(pluginEntries);
-    if (!keys.length) {
-      box.innerHTML = '<div class="set-empty">暂无插件，可在右侧导航栏插件区查看</div>';
+    var list = localPlugins.length ? localPlugins : (window.magicHub ? [] : marketPlugins.filter(function (p) { return p.public !== false; }));
+    if (!list.length) {
+      box.innerHTML = '<div class="set-empty">暂无插件，去「插件市场」下载安装</div>';
       return;
     }
     box.innerHTML = "";
-    keys.forEach(function (id) {
-      var p = pluginEntries[id];
+    list.forEach(function (p) {
       var row = document.createElement("div");
       row.className = "set-plugin";
       var icon = pluginIconUrl(p);
@@ -452,13 +522,28 @@
       box.appendChild(row);
     });
   }
+  // 后台驻留开关变化时写入桌面端设置
+  $("keepCheck").addEventListener("change", function () {
+    if (window.magicHub && window.magicHub.setKeepInBackground) {
+      window.magicHub.setKeepInBackground(this.checked).then(function () {
+        toast(this.checked ? "已开启后台驻留：关闭窗口时最小化到托盘" : "已关闭后台驻留：关闭窗口将退出程序");
+      }.bind(this));
+    }
+  });
   function showPlugin(id, meta) {
     hideAllViews();
     pluginView.style.display = "flex";
     viewTitle.textContent = meta.name;
     $("pluginTitle").textContent = meta.name;
-    $("pluginFrame").src = BASE + "/plugins/" + id + "/" + meta.entry;
+    $("pluginFrame").src = meta.localEntry || (BASE + "/plugins/" + id + "/" + meta.entry);
     setListPane(false);
+  }
+  function showMarket() {
+    hideAllViews();
+    $("marketView").style.display = "flex";
+    viewTitle.textContent = "插件市场";
+    setListPane(false);
+    renderMarket();
   }
 
   function clearRailActive() {
@@ -471,48 +556,255 @@
       var v = item.getAttribute("data-view");
       if (v === "chat") showChat();
       else if (v === "contacts") showContacts();
+      else if (v === "market") showMarket();
       else if (v === "settings") showSettings();
     });
   });
 
-  /* ===== 插件系统 ===== */
+  /* ===== 插件系统：本地已装优先加载，服务器市场可下载 ===== */
   function pluginIconUrl(p) {
     if (!p.icon) return null;
     if (/^(https?:)?\/\//.test(p.icon)) return p.icon;
+    if (p.localEntry) return "file:///" + (p.localEntry.slice("file:///".length).split("/").slice(0, -1).join("/") + "/" + p.icon);
     return BASE + "/plugins/" + p.id + "/" + p.icon;
   }
+
+  var localPlugins = []; // 桌面端：本地已安装插件
+  var marketPlugins = []; // 服务器市场插件列表
+
+  /** 渲染侧边栏插件区（本地已装插件） */
+  function renderPluginRail() {
+    var rail = $("pluginRail");
+    rail.innerHTML = "";
+    pluginEntries = {};
+    var list = localPlugins.slice();
+    // 浏览器模式（无桌面 IPC）：回退显示服务器公开插件
+    if (!window.magicHub || !window.magicHub.listLocalPlugins) {
+      list = marketPlugins.filter(function (p) { return p.public !== false; });
+    }
+    list.forEach(function (p) {
+      pluginEntries[p.id] = p;
+      var btn = document.createElement("button");
+      btn.className = "rail-item";
+      btn.title = p.name + "（插件）";
+      var icon = pluginIconUrl(p);
+      if (icon) {
+        var img = document.createElement("img");
+        img.src = icon; img.alt = "";
+        btn.appendChild(img);
+      } else {
+        btn.textContent = p.name.charAt(0);
+        btn.style.fontWeight = "800"; btn.style.fontSize = "14px"; btn.style.color = "var(--accent-soft)";
+      }
+      btn.addEventListener("click", function () {
+        clearRailActive(); btn.classList.add("on");
+        showPlugin(p.id, p);
+      });
+      rail.appendChild(btn);
+    });
+    $("pluginSep").hidden = list.length === 0;
+  }
+
   function loadPlugins() {
+    var localDone = false;
+    function done() { if (localDone) { renderPluginRail(); openByHash(); } }
+
+    // 桌面端：读取本地已装插件
+    if (window.magicHub && window.magicHub.listLocalPlugins) {
+      window.magicHub.listLocalPlugins()
+        .then(function (list) {
+          localPlugins = list || [];
+          localDone = true; done();
+        })
+        .catch(function () { localDone = true; done(); });
+    } else {
+      localDone = true;
+    }
+
+    // 服务器市场列表
     fetch(BASE + "/api/plugins")
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        var list = (data.ok && data.data && data.data.plugins) || [];
-        var rail = $("pluginRail");
-        rail.innerHTML = "";
-        list.forEach(function (p) {
-          pluginEntries[p.id] = p;
-          var btn = document.createElement("button");
-          btn.className = "rail-item";
-          btn.title = p.name + "（插件）";
-          var icon = pluginIconUrl(p);
-          if (icon) {
-            var img = document.createElement("img");
-            img.src = icon; img.alt = "";
-            btn.appendChild(img);
-          } else {
-            btn.textContent = p.name.charAt(0);
-            btn.style.fontWeight = "800"; btn.style.fontSize = "14px"; btn.style.color = "var(--accent-soft)";
-          }
-          btn.addEventListener("click", function () {
-            clearRailActive(); btn.classList.add("on");
-            showPlugin(p.id, p);
-          });
-          rail.appendChild(btn);
-        });
-        $("pluginSep").hidden = list.length === 0;
-        openByHash();
+        marketPlugins = (data.ok && data.data && data.data.plugins) || [];
+        localDone = true; done();
       })
       .catch(function () { /* 后端未启动 */ });
   }
+
+  /* ===== 插件市场视图 ===== */
+  function mktIcon(p) {
+    var icon = pluginIconUrl(p);
+    return icon ? '<img src="' + icon + '" alt="">' : p.name.charAt(0);
+  }
+  function installedLocalIds() {
+    var s = {};
+    localPlugins.forEach(function (p) { s[p.id] = p; });
+    return s;
+  }
+  function renderMarket() {
+    var box = $("marketBody");
+    var local = installedLocalIds();
+    if (!marketPlugins.length && !Object.keys(local).length) {
+      box.innerHTML = '<div class="market-empty">市场为空：先用右上角「上传」按钮把 .7z 插件包发布到服务器</div>';
+      return;
+    }
+    box.innerHTML = "";
+    var shown = {};
+    marketPlugins.forEach(function (p) { shown[p.id] = p; });
+    localPlugins.forEach(function (p) { if (!shown[p.id]) shown[p.id] = p; });
+
+    Object.keys(shown).forEach(function (id) {
+      var p = shown[id];
+      var lp = local[id];
+      var isLocal = !!lp;
+      var isOwner = p.isOwner;
+      var card = document.createElement("div");
+      card.className = "mkt-card";
+
+      var actions = "";
+      var badge = "";
+      if (isLocal) {
+        badge = '<span class="mkt-badge inst">已安装</span>';
+        actions += '<button class="mkt-btn danger" data-act="uninstall" data-id="' + id + '">卸载</button>';
+      } else {
+        badge = p.public === false ? '<span class="mkt-badge priv">未公开</span>' : '<span class="mkt-badge pub">公开</span>';
+        actions += '<button class="mkt-btn primary" data-act="install" data-id="' + id + '">下载安装</button>';
+      }
+      if (isOwner) {
+        actions += '<button class="mkt-btn" data-act="toggle" data-id="' + id + '">' + (p.public === false ? "设为公开" : "设为私有") + "</button>";
+        actions += '<button class="mkt-btn danger" data-act="delete" data-id="' + id + '">删除</button>';
+      }
+
+      card.innerHTML =
+        '<div class="mkt-icon">' + mktIcon(p) + '</div>' +
+        '<div class="mkt-info">' +
+          '<b>' + p.name + ' <span style="color:var(--text-3);font-weight:600;font-size:11px">v' + p.version + '</span></b>' +
+          '<div class="mkt-meta">作者：' + p.author + ' · ' + id + '</div>' +
+          (p.description ? '<div class="mkt-desc">' + p.description + '</div>' : "") +
+        '</div>' +
+        '<div class="mkt-actions">' + badge + actions + '</div>';
+
+      box.appendChild(card);
+    });
+  }
+
+  function marketToast(msg) { toast(msg); }
+
+  // 下载安装：拉 7z → 交给桌面端解压到本地
+  function installPlugin(p) {
+    if (!window.magicHub || !window.magicHub.installPlugin) {
+      marketToast("请在桌面客户端中下载安装插件（浏览器模式仅支持浏览与上传）");
+      return;
+    }
+    marketToast("正在下载 " + p.name + " …");
+    fetch(BASE + "/api/plugins/" + encodeURIComponent(p.id) + "/download", {
+      headers: { Authorization: "Bearer " + session.token },
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("下载失败");
+        return res.arrayBuffer();
+      })
+      .then(function (buf) {
+        return window.magicHub.installPlugin(p.id, buf);
+      })
+      .then(function (info) {
+        marketToast("插件「" + info.name + "」安装成功");
+        return window.magicHub.listLocalPlugins();
+      })
+      .then(function (list) { localPlugins = list || []; renderPluginRail(); renderMarket(); })
+      .catch(function (err) { marketToast("安装失败：" + (err.message || err)); });
+  }
+
+  function uninstallPlugin(id) {
+    if (!window.magicHub || !window.magicHub.uninstallPlugin) {
+      marketToast("请在桌面客户端中卸载插件");
+      return;
+    }
+    window.magicHub.uninstallPlugin(id)
+      .then(function () {
+        marketToast("插件已卸载");
+        return window.magicHub.listLocalPlugins();
+      })
+      .then(function (list) { localPlugins = list || []; renderPluginRail(); renderMarket(); })
+      .catch(function (err) { marketToast("卸载失败：" + (err.message || err)); });
+  }
+
+  // 上传 .7z 插件包到服务器
+  function uploadPluginPack(file) {
+    if (!/\.7z$/i.test(file.name)) {
+      marketToast("请选择 .7z 格式的插件包（可用 tools/plugin-pack.py 生成）");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) { marketToast("插件包不能超过 10MB"); return; }
+    marketToast("正在上传 " + file.name + " …");
+    var fr = new FileReader();
+    fr.onload = function () {
+      var data = fr.result; // dataURL
+      fetch(BASE + "/api/plugins/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+        body: JSON.stringify({ name: file.name, data: data }),
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            marketToast("插件「" + d.data.name + "」已发布到服务器（默认为私有，可在市场中设为公开）");
+            return fetch(BASE + "/api/plugins").then(function (r) { return r.json(); });
+          }
+          throw new Error((d.error && d.error.message) || "上传失败");
+        })
+        .then(function (d) {
+          marketPlugins = (d.ok && d.data && d.data.plugins) || [];
+          renderMarket();
+        })
+        .catch(function (err) { marketToast("上传失败：" + (err.message || err)); });
+    };
+    fr.readAsDataURL(file);
+  }
+
+  $("pluginUploadBtn").addEventListener("click", function () { $("pluginPackInput").click(); });
+  $("pluginPackInput").addEventListener("change", function () {
+    if (this.files && this.files[0]) uploadPluginPack(this.files[0]);
+    this.value = "";
+  });
+  $("marketBody").addEventListener("click", function (e) {
+    var btn = e.target.closest(".mkt-btn");
+    if (!btn) return;
+    var act = btn.getAttribute("data-act"), id = btn.getAttribute("data-id");
+    var p = marketPlugins.find(function (x) { return x.id === id; }) || {};
+    if (act === "install") installPlugin(p);
+    else if (act === "uninstall") uninstallPlugin(id);
+    else if (act === "delete") {
+      if (!confirm("确定删除插件「" + (p.name || id) + "」？服务器与市场中的该插件都会被删除。")) return;
+      fetch(BASE + "/api/plugins/" + encodeURIComponent(id), {
+        method: "DELETE",
+        headers: { Authorization: "Bearer " + session.token },
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error((d.error && d.error.message) || "删除失败");
+          marketToast("插件已删除");
+          return fetch(BASE + "/api/plugins").then(function (r) { return r.json(); });
+        })
+        .then(function (d) { marketPlugins = (d.ok && d.data && d.data.plugins) || []; renderMarket(); })
+        .catch(function (err) { marketToast("删除失败：" + (err.message || err)); });
+    } else if (act === "toggle") {
+      var toPublic = p.public === false;
+      fetch(BASE + "/api/plugins/" + encodeURIComponent(id) + "/visibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+        body: JSON.stringify({ public: toPublic }),
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error((d.error && d.error.message) || "设置失败");
+          marketToast(toPublic ? "插件已公开，所有用户可见" : "插件已设为私有");
+          return fetch(BASE + "/api/plugins").then(function (r) { return r.json(); });
+        })
+        .then(function (d) { marketPlugins = (d.ok && d.data && d.data.plugins) || []; renderMarket(); })
+        .catch(function (err) { marketToast("设置失败：" + (err.message || err)); });
+    }
+  });
   $("pluginClose").addEventListener("click", function () {
     showChat(); clearRailActive(); railItems[0].classList.add("on");
     if (location.hash) history.replaceState(null, "", location.pathname);
@@ -530,6 +822,13 @@
       clearRailActive();
       railItems[1].classList.add("on");
       showContacts();
+      return;
+    }
+    if (location.hash === "#market") {
+      clearRailActive();
+      var mi = railItems.findIndex(function (x) { return x.getAttribute("data-view") === "market"; });
+      if (mi >= 0) railItems[mi].classList.add("on");
+      showMarket();
       return;
     }
     if (location.hash === "#settings") {
