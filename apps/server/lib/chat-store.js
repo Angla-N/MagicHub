@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.MAGICHUB_DATA_DIR || join(__dirname, "..", "data");
+export const DATA_DIR = process.env.MAGICHUB_DATA_DIR || join(__dirname, "..", "data");
 const USERS_FILE = join(DATA_DIR, "users.json");
 const CHAT_FILE = join(DATA_DIR, "chat.json");
 
@@ -140,16 +140,25 @@ export function getMessages(convIdValue, me) {
   return conv.messages;
 }
 
-/** 发消息：落盘并返回消息对象（WS 推送由 server 完成） */
-export function addMessage(convIdValue, from, text) {
-  if (typeof text !== "string" || !text.trim()) {
-    return { ok: false, error: { code: "INVALID_MESSAGE", message: "消息不能为空" } };
+/** 发消息：落盘并返回消息对象（WS 推送由 server 完成）；支持文本 text 与文件 file 元数据 */
+export function addMessage(convIdValue, from, text, file) {
+  const hasText = typeof text === "string" && text.trim().length > 0;
+  const hasFile = !!file && typeof file === "object";
+  if (!hasText && !hasFile) {
+    return { ok: false, error: { code: "INVALID_MESSAGE", message: "消息内容为空" } };
   }
   const chat = loadChat();
   const conv = convOf(chat, convIdValue, from);
   if (!conv) return { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问（请先添加好友）" } };
 
-  const msg = { from, text: text.slice(0, 2000), ts: Date.now() };
+  const msg = { from, ts: Date.now() };
+  if (hasText) msg.text = text.trim().slice(0, 2000);
+  if (hasFile) msg.file = {
+    url: file.url,
+    name: String(file.name || "file").slice(0, 120),
+    type: String(file.type || "application/octet-stream").slice(0, 80),
+    size: Number(file.size) || 0,
+  };
   conv.messages.push(msg);
   if (conv.messages.length > 500) conv.messages = conv.messages.slice(-500); // 单会话最多保留 500 条
   // 未读计数：给会话另一方 +1（打开会话后由 markRead 清零）

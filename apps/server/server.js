@@ -19,7 +19,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { extname, join, normalize, sep } from "node:path";
 import { dirname } from "node:path";
@@ -27,13 +27,14 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import { ensureStore, register, login, getUser, AVATARS_DIR } from "./lib/user-store.js";
 import {
-  listUsers, listFriends, addFriend, listConversations, getMessages, addMessage, peerOf, markRead,
+  listUsers, listFriends, addFriend, listConversations, getMessages, addMessage, peerOf, markRead, DATA_DIR,
 } from "./lib/chat-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 仓库根 plugins/（Electron 打包场景由主进程注入）
-const MAX_BODY = 512 * 1024; // API 请求体上限 512KB（含头像 base64）
+const UPLOADS_DIR = join(DATA_DIR, "uploads");
+const MAX_BODY = 12 * 1024 * 1024; // 请求体上限 12MB（头像 + 图片/文件消息 base64）
 
 /* ---------- 登录会话（内存 token，重启后需重新登录） ---------- */
 const sessions = new Map(); // token -> { username, expiresAt }
@@ -125,30 +126,46 @@ const MIME = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
+  ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+  ".rar": "application/x-rar-compressed",
+  ".7z": "application/x-7z-compressed",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".txt": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
 };
 
 /** 读取请求体（限制大小） */
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    let size = 0;
+    let size = 0, tooLarge = false;
     req.on("data", (chunk) => {
+      if (tooLarge) return;
       size += chunk.length;
       if (size > MAX_BODY) {
-        reject(new Error("body too large"));
-        req.destroy();
+        tooLarge = true;
+        chunks.length = 0;
         return;
       }
       chunks.push(chunk);
     });
     req.on("end", () => {
-      try {
-        resolve(Buffer.concat(chunks).toString("utf8"));
-      } catch (err) {
-        reject(err);
-      }
+      if (tooLarge) return resolve({ ok: false, reason: "too_large" });
+      resolve({ ok: true, raw: Buffer.concat(chunks).toString("utf8") });
     });
     req.on("error", reject);
   });
@@ -171,6 +188,22 @@ function resolveInRoot(baseRoot, urlPath) {
   const file = join(baseRoot, normalized);
   if (file !== baseRoot && !file.startsWith(baseRoot + sep)) return null;
   return file;
+}
+
+/** 保存上传文件到 data/uploads，返回静态访问路径 */
+function saveUploadFile(base64, origName) {
+  if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
+  const rawExt = extname(origName || "").toLowerCase();
+  const safeExt = /^[.\w-]{1,12}$/.test(rawExt) ? rawExt : ".bin";
+  const name = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + safeExt;
+  writeFileSync(join(UPLOADS_DIR, name), base64);
+  return "/uploads/" + name;
+}
+
+/** 兼容带 data URL 前缀或纯 base64 两种输入 */
+function decodeBase64Payload(s) {
+  const m = /^data:[\w/.-]+;base64,(.*)$/s.exec(s || "");
+  return Buffer.from(m ? m[1] : (s || ""), "base64");
 }
 
 async function serveStatic(res, file) {
@@ -212,8 +245,11 @@ const httpServer = createServer(async (req, res) => {
     if (method === "POST" && (urlPath === "/api/register" || urlPath === "/api/login")) {
       let payload;
       try {
-        const raw = await readBody(req);
-        payload = raw ? JSON.parse(raw) : {};
+        const body = await readBody(req);
+        if (!body.ok) {
+          return sendJson(res, 413, { ok: false, error: { code: "BODY_TOO_LARGE", message: "请求体过大（含附件请使用消息文件上传）" } });
+        }
+        payload = body.raw ? JSON.parse(body.raw) : {};
       } catch {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
       }
@@ -238,8 +274,11 @@ const httpServer = createServer(async (req, res) => {
       }
       let payload;
       try {
-        const raw = await readBody(req);
-        payload = raw ? JSON.parse(raw) : {};
+        const body = await readBody(req);
+        if (!body.ok) {
+          return sendJson(res, 413, { ok: false, error: { code: "BODY_TOO_LARGE", message: "请求体过大（含附件请使用消息文件上传）" } });
+        }
+        payload = body.raw ? JSON.parse(body.raw) : {};
       } catch {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
       }
@@ -249,7 +288,22 @@ const httpServer = createServer(async (req, res) => {
       } else if (urlPath === "/api/conversations/read") {
         result = markRead(payload.convId, username);
       } else {
-        result = addMessage(payload.convId, username, payload.text);
+        // 文件消息：base64 解码落盘（≤8MB），再存消息元数据
+        let fileMeta = null;
+        const pf = payload.file;
+        if (pf && pf.data) {
+          const buf = decodeBase64Payload(pf.data);
+          if (buf.length > 8 * 1024 * 1024) {
+            return sendJson(res, 400, { ok: false, error: { code: "FILE_TOO_LARGE", message: "文件不能超过 8MB" } });
+          }
+          fileMeta = {
+            url: saveUploadFile(buf, pf.name),
+            name: String(pf.name || "file"),
+            type: String(pf.type || "application/octet-stream"),
+            size: Number(pf.size) || buf.length,
+          };
+        }
+        result = addMessage(payload.convId, username, payload.text, fileMeta);
         if (result.ok) {
           const peer = peerOf(payload.convId, username);
           if (peer) pushToPeer(peer, {
@@ -314,6 +368,12 @@ const httpServer = createServer(async (req, res) => {
     // ---- 头像：/avatars/<file> ----
     if (urlPath.startsWith("/avatars/")) {
       const file = resolveInRoot(AVATARS_DIR, urlPath.slice("/avatars/".length));
+      return await serveStatic(res, file);
+    }
+
+    // ---- 上传文件（图片/文档等）：/uploads/<file> ----
+    if (urlPath.startsWith("/uploads/")) {
+      const file = resolveInRoot(UPLOADS_DIR, urlPath.slice("/uploads/".length));
       return await serveStatic(res, file);
     }
 

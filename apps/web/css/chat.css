@@ -29,7 +29,7 @@
 .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:8px 12px}
 .search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--text);font-size:16px}
 .search input::placeholder{color:var(--text-3)}
-.list{padding:6px 8px 14px;overflow:auto}
+.list{padding:6px 8px 14px;overflow:auto;min-height:0}
 .chat-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;transition:.18s;cursor:pointer}
 .chat-item:hover,.chat-item.on{background:var(--surface-2)}
 .chat-item .c-main{flex:1;min-width:0}
@@ -47,14 +47,14 @@
 .unread{background:var(--grad);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;box-shadow:0 2px 8px rgba(124,58,237,.5)}
 
 /* ---------- 4. 聊天主区（聊天视图占满内容区） ---------- */
-.chat-pane{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-soft)}
+.chat-pane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--bg-soft)}
 .chat-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
 .chat-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(168,85,247,.8)}
 .chat-head h4{font-size:14px;font-weight:700}
 .chat-head .tools{margin-left:auto;display:flex;gap:4px}
 
 /* 消息区 */
-.msg-area{flex:1;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+.msg-area{flex:1;min-height:0;overflow:auto;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
 .date-pill{align-self:center;font-size:10px;color:var(--text-3);background:var(--surface);padding:3px 12px;border-radius:999px;border:1px solid var(--border)}
 .msg{display:flex;gap:8px;max-width:82%;animation:pop .3s ease both}
 @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -137,3 +137,40 @@
 .card-actions{display:flex;gap:8px;margin-top:12px}
 .card-actions .add-btn{margin:0}
 @keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* ---------- 8. 附件（图片/文件）消息 与 发送失败重试 ---------- */
+
+/* 输入栏附件按钮 */
+.input-tools{display:flex;align-items:center;gap:6px;flex:none}
+.attach-btn{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:var(--text-3);background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:.18s}
+.attach-btn:hover{color:var(--accent-soft);border-color:var(--primary-strong)}
+.attach-pop{position:absolute;bottom:58px;left:14px;display:none;flex-direction:column;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:0 14px 40px rgba(0,0,0,.5);z-index:40}
+.attach-pop.show{display:flex}
+.attach-pop button{display:flex;align-items:center;gap:10px;width:168px;padding:9px 12px;border:none;background:none;color:var(--text-2);border-radius:9px;font-size:13px;cursor:pointer;text-align:left;transition:.15s}
+.attach-pop button:hover{background:rgba(124,58,237,.14);color:var(--accent-soft)}
+.attach-pop button svg{color:var(--accent-soft);flex:none}
+
+/* 图片消息 */
+.msg-img{display:block;max-width:260px;max-height:220px;border-radius:12px;object-fit:cover;cursor:zoom-in;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.bubble.has-img{padding:6px;background:var(--bg-soft);border-color:var(--border)}
+
+/* 文件卡片 */
+.file-card{display:flex;align-items:center;gap:10px;min-width:200px;max-width:280px}
+.file-ico{width:36px;height:36px;border-radius:10px;background:rgba(124,58,237,.18);color:var(--accent-soft);display:grid;place-items:center;flex:none}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-size{font-size:11px;color:var(--text-3)}
+.file-dl{flex:none;font-size:11px;font-weight:700;color:#fff;background:var(--grad);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;text-decoration:none;transition:.18s}
+.file-dl:hover{filter:brightness(1.12)}
+.msg.in .file-card .file-name{color:var(--text)}
+.msg.out .file-card .file-name{color:#fff}
+
+/* 发送失败气泡（点击重试） */
+.msg.fail .bubble{background:var(--surface-2);border:1px solid var(--danger,#f43f5e);color:var(--text-2);cursor:pointer}
+.msg.fail .bubble:hover{background:rgba(244,63,94,.12)}
+.retry-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--danger,#f43f5e);font-weight:700;margin-top:3px}
+
+/* 图片查看灯箱 */
+.lightbox{position:fixed;inset:0;background:rgba(5,4,10,.82);display:none;place-items:center;z-index:80;cursor:zoom-out}
+.lightbox.show{display:grid}
+.lightbox img{max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.7)}
