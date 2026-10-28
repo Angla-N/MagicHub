@@ -211,3 +211,17 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
 
 /* ---------- 12. 无障碍 ---------- */
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ---------- 13. 全局滚动条（现代深色风格，统一所有页面与弹层） ---------- */
+/* Firefox */
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+/* Chromium / Electron / Edge */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.14);border-radius:99px;
+  border:3px solid transparent;background-clip:padding-box; /* 内边距让滑块更纤细 */
+}
+*::-webkit-scrollbar-thumb:hover{background:var(--primary,#7C3AED)}
+*::-webkit-scrollbar-thumb:active{background:var(--accent,#A855F7)}
+*::-webkit-scrollbar-corner{background:transparent}
