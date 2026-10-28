@@ -1,0 +1,9 @@
+{
+  "name": "magichub-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MagicHub 前端（独立运行，前后端分离；后端 API 见 apps/server）",
+  "scripts": {
+    "start": "node scripts/serve.mjs"
+  }
+}

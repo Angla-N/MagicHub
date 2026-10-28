@@ -1,30 +1,57 @@
 /**
- * MagicHub 后端 · V0.2
+ * MagicHub 后端（独立服务，前后端分离）
  *
  * 能力：
- *  1. 静态文件服务：托管 apps/web（H5 前端：/、/login.html、/css/*）
- *  2. 账号 API：POST /api/register、POST /api/login（JSON 存储 + scrypt 哈希）
- *  3. WebSocket 服务：连接即 hello，收到消息原样广播（连通验证）
+ *  1. 账号 API：POST /api/register（用户名/名字/密码/头像）、POST /api/login（返回 token）、GET /api/me
+ *  2. 插件 API：GET /api/plugins（扫描 plugins/）、/plugins/<id>/ 静态服务
+ *  3. 头像静态服务：/avatars/<file>
+ *  4. WebSocket 服务：连接即 hello，收到消息原样广播（连通验证）
+ *  5. CORS：允许前端独立部署（H5 或 Electron file://）跨域调用
  *
  * 启动：
  *  cd apps/server
- *  npm install   # 首次
  *  npm start     # 默认端口 3000，可用 PORT 环境变量覆盖
+ *
+ * 前端独立运行（不再由后端托管页面）：
+ *  cd apps/web
+ *  npm start     # 独立静态服务器，默认 5173
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { extname, join, normalize, sep } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
-import { ensureStore, register, login } from "./lib/user-store.js";
+import { ensureStore, register, login, getUser, AVATARS_DIR } from "./lib/user-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
-const WEB_ROOT = join(__dirname, "..", "web");
 const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 仓库根 plugins/（Electron 打包场景由主进程注入）
-const MAX_BODY = 64 * 1024; // API 请求体上限 64KB
+const MAX_BODY = 512 * 1024; // API 请求体上限 512KB（含头像 base64）
+
+/* ---------- 登录会话（内存 token，重启后需重新登录） ---------- */
+const sessions = new Map(); // token -> { username, expiresAt }
+
+function issueToken(username) {
+  const token = randomBytes(24).toString("hex");
+  sessions.set(token, { username, expiresAt: Date.now() + 7 * 24 * 3600 * 1000 });
+  return token;
+}
+
+function resolveToken(req) {
+  const auth = req.headers.authorization || "";
+  const m = /^Bearer\s+(\S+)$/.exec(auth);
+  if (!m) return null;
+  const s = sessions.get(m[1]);
+  if (!s) return null;
+  if (s.expiresAt < Date.now()) {
+    sessions.delete(m[1]);
+    return null;
+  }
+  return s.username;
+}
 
 ensureStore();
 
@@ -83,7 +110,7 @@ function resolvePluginPath(urlPath) {
   return file;
 }
 
-/* ================= HTTP：静态服务 + API ================= */
+/* ================= HTTP：API + 静态资源 ================= */
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -124,22 +151,27 @@ function readBody(req) {
 }
 
 function sendJson(res, status, payload) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  });
   res.end(JSON.stringify(payload));
 }
 
-/** 安全地把 URL 路径解析为 WEB_ROOT 内的文件路径 */
-function resolveStaticPath(urlPath) {
+/** 安全地把 URL 路径解析为 baseRoot 内的文件路径（防路径穿越） */
+function resolveInRoot(baseRoot, urlPath) {
   const decoded = decodeURIComponent(urlPath);
   const normalized = normalize(decoded).replace(/^([/\\])+/, "");
-  const file = join(WEB_ROOT, normalized);
-  if (file !== WEB_ROOT && !file.startsWith(WEB_ROOT + sep)) return null; // 路径穿越防护
+  const file = join(baseRoot, normalized);
+  if (file !== baseRoot && !file.startsWith(baseRoot + sep)) return null;
   return file;
 }
 
 async function serveStatic(res, file) {
   if (!file || !existsSync(file)) {
-    sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "页面不存在" } });
+    sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "资源不存在" } });
     return;
   }
   const info = await stat(file);
@@ -148,7 +180,12 @@ async function serveStatic(res, file) {
   }
   const type = MIME[extname(file).toLowerCase()] || "application/octet-stream";
   const body = await readFile(file);
-  res.writeHead(200, { "Content-Type": type, "Content-Length": body.length });
+  res.writeHead(200, {
+    "Content-Type": type,
+    "Content-Length": body.length,
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "no-cache",
+  });
   res.end(body);
 }
 
@@ -157,7 +194,17 @@ const httpServer = createServer(async (req, res) => {
   const urlPath = (req.url || "/").split("?")[0];
 
   try {
-    // ---- API 路由 ----
+    // ---- CORS 预检 ----
+    if (method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      });
+      return res.end();
+    }
+
+    // ---- 账号 API ----
     if (method === "POST" && (urlPath === "/api/register" || urlPath === "/api/login")) {
       let payload;
       try {
@@ -167,15 +214,29 @@ const httpServer = createServer(async (req, res) => {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
       }
 
-      const result = urlPath === "/api/register"
-        ? register(payload.username, payload.password)
-        : login(payload.username, payload.password);
-
+      let result;
+      if (urlPath === "/api/register") {
+        result = register(payload.username, payload.password, payload.displayName, payload.avatar);
+      } else {
+        result = login(payload.username, payload.password);
+        if (result.ok) {
+          result.data.token = issueToken(result.data.username);
+        }
+      }
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
     if (method !== "GET" && method !== "HEAD") {
       return sendJson(res, 405, { ok: false, error: { code: "METHOD_NOT_ALLOWED", message: "不支持的方法" } });
+    }
+
+    // ---- 会话校验：GET /api/me ----
+    if (urlPath === "/api/me") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      return sendJson(res, 200, { ok: true, data: getUser(username) });
     }
 
     // ---- 插件 API：插件列表 ----
@@ -188,9 +249,13 @@ const httpServer = createServer(async (req, res) => {
       return await serveStatic(res, resolvePluginPath(urlPath.slice("/plugins/".length)));
     }
 
-    // ---- 静态文件 ----
-    const file = resolveStaticPath(urlPath === "/" ? "/index.html" : urlPath);
-    return await serveStatic(res, file);
+    // ---- 头像：/avatars/<file> ----
+    if (urlPath.startsWith("/avatars/")) {
+      const file = resolveInRoot(AVATARS_DIR, urlPath.slice("/avatars/".length));
+      return await serveStatic(res, file);
+    }
+
+    return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "接口或资源不存在（前端页面请由 apps/web 独立服务提供）" } });
   } catch (err) {
     console.error(`[http] ${method} ${urlPath} -> ${err.message}`);
     return sendJson(res, 500, { ok: false, error: { code: "INTERNAL", message: "服务器内部错误" } });
@@ -228,8 +293,9 @@ wss.on("connection", (ws) => {
 
 httpServer.listen(PORT, () => {
   console.log(`MagicHub server listening:`);
-  console.log(`  http   -> http://localhost:${PORT}`);
+  console.log(`  api       -> http://localhost:${PORT}/api/*`);
   console.log(`  websocket -> ws://localhost:${PORT}`);
-  console.log(`  web     -> ${WEB_ROOT}`);
-  console.log(`  plugins -> ${PLUGINS_ROOT}`);
+  console.log(`  plugins   -> ${PLUGINS_ROOT}`);
+  console.log(`  avatars   -> ${AVATARS_DIR}`);
+  console.log(`（前端页面由 apps/web 独立提供，本服务不托管页面）`);
 });

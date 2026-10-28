@@ -92,11 +92,17 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // 把内置服务地址注入渲染进程（preload 通过 process.argv 读取）
+      additionalArguments: [`--magichub-server-base=http://127.0.0.1:${serverPort}`],
     },
   });
 
   win.once("ready-to-show", () => win.show());
-  win.loadURL(`http://127.0.0.1:${serverPort}`);
+  // 前端独立加载本地页面（file://），API / WS 跨域走内置服务（后端已开 CORS）
+  const webIndex = app.isPackaged
+    ? path.join(process.resourcesPath, "web", "index.html")
+    : path.join(__dirname, "..", "..", "web", "index.html");
+  win.loadFile(webIndex);
   win.on("closed", () => { win = null; });
 }
 

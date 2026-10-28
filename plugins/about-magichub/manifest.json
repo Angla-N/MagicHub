@@ -3,5 +3,6 @@
   "version": "1.0.0",
   "description": "一份 HTML 页面，介绍 MagicHub 的产品定位、功能、技术架构与当前进度",
   "entry": "index.html",
+  "icon": "icon.svg",
   "author": "MagicHub Team"
 }

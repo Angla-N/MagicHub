@@ -14,13 +14,26 @@
     background:linear-gradient(180deg,rgba(14,14,14,.86) 0%,rgba(18,18,18,.5) 52%,rgba(14,14,14,.9) 100%)}
   .auth-card{position:relative;z-index:1;background:rgba(37,37,38,.74);backdrop-filter:blur(16px);
     border:1px solid rgba(255,255,255,.08)}
+  .auth-card.wide{max-width:420px}
+  .reg-field{display:none;animation:regIn .25s ease both}
+  @keyframes regIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .auth-card.reg .reg-field{display:block}
+  .reg-row{display:flex;gap:12px;align-items:center}
+  .avatar-pick{flex:none;width:64px;height:64px;border-radius:14px;overflow:hidden;position:relative;
+    background:var(--surface-2);border:1px dashed var(--border);cursor:pointer;display:grid;place-items:center}
+  .avatar-pick img{width:100%;height:100%;object-fit:cover;display:none}
+  .avatar-pick .ph{color:var(--text-3);font-size:20px;display:grid;place-items:center}
+  .avatar-pick:hover{border-color:var(--primary-strong);background:rgba(124,58,237,.12)}
+  .avatar-tip{font-size:11px;color:var(--text-3);line-height:1.5}
+  .avatar-preview{width:64px;height:64px;border-radius:14px;object-fit:cover;display:none}
+  #avatarInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
 <div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <div class="auth-page">
-  <div class="auth-card">
+  <div class="auth-card wide" id="authCard">
     <div class="logo"><span class="logo-badge"><svg viewBox="0 0 1077.9 1024" fill="none"><path d="M0 0h1077.9v808.4h-246.2l-35 215.6-379.1-215.6H0V0z" fill="#fff"/><path d="M269.5 323.4h107.8v161.7H269.5zM646.7 323.4h107.8v161.7H646.7z" fill="#fff"/></svg></span>MagicHub</div>
     <p class="subtitle">登录或注册，开始你的轻量聊天</p>
 
@@ -35,6 +48,25 @@
         <input class="input" id="username" name="username" autocomplete="username"
                placeholder="3-24 位字母、数字或下划线" maxlength="24">
       </div>
+
+      <!-- 注册专属字段 -->
+      <div class="reg-field field">
+        <label for="displayName">名字</label>
+        <input class="input" id="displayName" name="displayName" autocomplete="nickname"
+               placeholder="怎么称呼你（1-32 个字符）" maxlength="32">
+      </div>
+      <div class="reg-field field">
+        <label>头像</label>
+        <div class="reg-row">
+          <label class="avatar-pick" id="avatarPick" for="avatarInput" title="点击上传头像">
+            <span class="ph" id="avatarPh">＋</span>
+            <img id="avatarImg" alt="头像预览">
+            <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/gif,image/webp">
+          </label>
+          <span class="avatar-tip">选一张图片作头像（自动裁剪为方形圆角并压缩，保存到服务器）</span>
+        </div>
+      </div>
+
       <div class="field">
         <label for="password">密码</label>
         <input class="input" id="password" name="password" type="password" autocomplete="current-password"
@@ -52,9 +84,12 @@
 
 <script>
 (function () {
+  "use strict";
   var mode = "login"; // login | register
+  var API = "http://localhost:3000"; // 后端独立服务；Electron 桌面端由 magicHub.serverBase 覆盖
   var form = document.getElementById("authForm");
   var usernameEl = document.getElementById("username");
+  var displayNameEl = document.getElementById("displayName");
   var passwordEl = document.getElementById("password");
   var errorEl = document.getElementById("authError");
   var submitBtn = document.getElementById("submitBtn");
@@ -62,11 +97,16 @@
   var tabRegister = document.getElementById("tabRegister");
   var switchBtn = document.getElementById("switchBtn");
   var switchHint = document.getElementById("switchHint");
+  var authCard = document.getElementById("authCard");
+  var avatarData = null; // base64 data URL（未选则为 null）
+
+  if (window.magicHub && window.magicHub.serverBase) API = window.magicHub.serverBase;
 
   function setMode(m) {
     mode = m;
     tabLogin.classList.toggle("on", m === "login");
     tabRegister.classList.toggle("on", m === "register");
+    authCard.classList.toggle("reg", m === "register");
     submitBtn.textContent = m === "login" ? "登 录" : "注 册";
     switchHint.innerHTML = m === "login"
       ? '还没有账号？<button type="button" id="switchBtn2">去注册</button>'
@@ -81,10 +121,46 @@
   tabRegister.addEventListener("click", function () { setMode("register"); });
   switchBtn.addEventListener("click", function () { setMode(mode === "login" ? "register" : "login"); });
 
-  function showError(msg) {
-    errorEl.textContent = msg;
-  }
+  function showError(msg) { errorEl.textContent = msg; }
 
+  /* ===== 头像上传：读取 -> 中心裁剪 128x128 -> JPEG 压缩 -> 预览 ===== */
+  var avatarInput = document.getElementById("avatarInput");
+  var avatarImg = document.getElementById("avatarImg");
+  var avatarPh = document.getElementById("avatarPh");
+
+  avatarInput.addEventListener("change", function () {
+    var file = avatarInput.files && avatarInput.files[0];
+    if (!file) return;
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) {
+      showError("仅支持 PNG / JPG / GIF / WebP 图片");
+      return;
+    }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      var size = 128;
+      var canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#252526";
+      ctx.fillRect(0, 0, size, size);
+      var side = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      avatarData = canvas.toDataURL("image/jpeg", 0.85);
+      avatarImg.src = avatarData;
+      avatarImg.style.display = "block";
+      avatarPh.style.display = "none";
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      showError("图片读取失败，请换一张");
+    };
+    img.src = url;
+  });
+
+  /* ===== 提交 ===== */
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var username = usernameEl.value.trim();
@@ -99,33 +175,53 @@
       return;
     }
 
+    var body;
+    if (mode === "register") {
+      var name = displayNameEl.value.trim();
+      if (!name) { showError("请填写名字"); return; }
+      if (name.length > 32) { showError("名字最长 32 个字符"); return; }
+      body = JSON.stringify({ username: username, password: password, displayName: name, avatar: avatarData });
+    } else {
+      body = JSON.stringify({ username: username, password: password });
+    }
+
     submitBtn.disabled = true;
     submitBtn.textContent = mode === "login" ? "登录中…" : "注册中…";
 
-    fetch(mode === "login" ? "/api/login" : "/api/register", {
+    fetch(API + (mode === "login" ? "/api/login" : "/api/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: username, password: password })
+      body: body
     })
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data.ok) {
           if (mode === "register") {
-            // 注册成功后切回登录态，提示去登录
+            // 注册成功：预填账号，切回登录态提示去登录
             setMode("login");
             usernameEl.value = username;
             passwordEl.value = "";
             showError("");
             switchHint.innerHTML = "注册成功，请登录";
+            submitBtn.disabled = false;
+            submitBtn.textContent = "登 录";
             return;
           }
-          localStorage.setItem("magichub_user", username);
+          // 登录成功：保存会话（含 token 与资料），进入主界面
+          var d = data.data || {};
+          localStorage.setItem("magichub_session", JSON.stringify({
+            username: d.username,
+            displayName: d.displayName || d.username,
+            avatar: d.avatar || null,
+            token: d.token,
+            loginAt: Date.now()
+          }));
           location.href = "index.html";
         } else {
           showError((data.error && data.error.message) || "操作失败，请重试");
+          submitBtn.disabled = false;
+          submitBtn.textContent = mode === "login" ? "登 录" : "注 册";
         }
-        submitBtn.disabled = false;
-        submitBtn.textContent = mode === "login" ? "登 录" : "注 册";
       })
       .catch(function () {
         showError("无法连接服务器，请先启动后端（apps/server · npm start）");
@@ -135,7 +231,7 @@
   });
 
   // 若已登录，直接进入聊天页
-  if (localStorage.getItem("magichub_user")) {
+  if (localStorage.getItem("magichub_session")) {
     location.href = "index.html";
   }
 })();

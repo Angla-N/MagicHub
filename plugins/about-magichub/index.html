@@ -12,24 +12,26 @@
     --text:#E8E8E8; --text-2:#9D9D9D; --text-3:#6E6E6E;
   }
   body{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.65;min-width:320px}
-  .wrap{max-width:920px;margin:0 auto;padding:40px 24px 56px}
+  /* 通栏占满布局：内容铺满整个插件视图，不居中窄卡 */
+  .wrap{max-width:none;margin:0;padding:34px 40px 48px;width:100%}
 
   /* 头部 */
-  header{text-align:center;padding:8px 0 34px}
+  header{text-align:center;padding:6px 0 28px}
   .logo{display:inline-flex;align-items:center;gap:14px;font-size:26px;font-weight:900;letter-spacing:.5px}
   .logo-badge{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#7C3AED,#A855F7);display:grid;place-items:center;box-shadow:0 8px 28px rgba(124,58,237,.5)}
   .logo-badge svg{width:60%;height:60%}
   .tagline{color:var(--text-2);font-size:14px;margin-top:14px}
 
   /* 区块 */
-  section{margin-top:40px}
+  section{margin-top:34px}
   h2{font-size:18px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:10px}
   h2::before{content:"";width:18px;height:3px;border-radius:3px;background:linear-gradient(90deg,#7C3AED,#A855F7)}
   .desc{color:var(--text-3);font-size:13px;margin:-8px 0 18px}
 
-  /* 功能网格 */
+  /* 功能网格：宽屏 3 列铺满 */
   .grid{display:grid;grid-template-columns:1fr;gap:12px}
-  @media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
+  @media(min-width:760px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:520px) and (max-width:759px){.grid{grid-template-columns:1fr 1fr}}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
   .card b{display:block;font-size:14px;color:var(--soft);margin-bottom:6px}
   .card span{font-size:12px;color:var(--text-2)}
@@ -54,7 +56,7 @@
   .proto code{display:block;font-family:Consolas,Menlo,monospace;font-size:12px;color:var(--soft);line-height:1.9}
   .proto p{font-size:12px;color:var(--text-2);margin-top:8px}
 
-  footer{text-align:center;color:var(--text-3);font-size:12px;margin-top:48px;border-top:1px solid var(--border);padding-top:24px}
+  footer{text-align:center;color:var(--text-3);font-size:12px;margin-top:40px;border-top:1px solid var(--border);padding-top:22px}
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>

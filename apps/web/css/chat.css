@@ -38,8 +38,9 @@
 .c-time{margin-left:auto;font-size:10px;color:var(--text-3);flex:none}
 .c-prev{font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* 头像 */
-.avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:14px;font-weight:700;flex:none}
+/* 头像：方形圆角（非圆形） */
+.avatar{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:#fff;font-size:14px;font-weight:700;flex:none;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
 
 /* 未读徽标 */
 .badge{background:var(--grad);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;box-shadow:0 2px 8px rgba(124,58,237,.55)}

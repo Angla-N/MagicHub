@@ -12,15 +12,23 @@
   body{height:100vh;display:flex;flex-direction:column;overflow:hidden}
   .app-shell{height:calc(100vh - 46px);grid-template-columns:64px 240px 1fr;border-radius:0;border:none;box-shadow:none}
   @media(max-width:820px){.app-shell{grid-template-columns:64px 1fr}}
-  .rail-avatar{width:38px;height:38px;border-radius:50%;background:var(--grad);color:#fff;font-weight:800;font-size:15px;
-    margin-bottom:14px;display:grid;place-items:center;box-shadow:0 4px 14px rgba(124,58,237,.45)}
-  .rail-plugins{display:flex;flex-direction:column;align-items:center;gap:6px}
 
-  /* 插件视图 */
-  .plugin-view{display:flex;flex-direction:column;min-width:0;background:var(--bg-soft)}
+  /* 头像：方形圆角（非圆形） */
+  .rail-avatar{width:38px;height:38px;border-radius:10px;background:var(--grad);color:#fff;font-weight:800;font-size:15px;
+    margin-bottom:14px;display:grid;place-items:center;box-shadow:0 4px 14px rgba(124,58,237,.45);overflow:hidden}
+  .rail-avatar img{width:100%;height:100%;object-fit:cover}
+  .rail-plugins{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .rail-plugins .rail-item img{width:20px;height:20px;border-radius:5px}
+
+  /* 会话列表：仅聊天视图显示 */
+  body:not(.chat-mode) .list-pane{display:none!important}
+  @media(min-width:820px){body.chat-mode .list-pane{display:flex}}
+
+  /* 插件视图：占满聊天区剩余空间 */
+  .plugin-view{display:flex;flex-direction:column;min-width:0;background:var(--bg-soft);flex:1}
   .plugin-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
   .plugin-head h4{font-size:14px;font-weight:700}
-  .plugin-frame{flex:1;border:none;background:var(--bg)}
+  .plugin-frame{flex:1;min-height:0;border:none;background:var(--bg)}
 
   /* 占位视图（联系人/文件/通知/设置 演示） */
   .ph-view{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;min-width:0}
@@ -40,7 +48,7 @@
   </div>
 </header>
 
-<div class="app-shell">
+<div class="app-shell" id="appShell">
   <!-- ===== 左侧导航栏（QQ 风格） ===== -->
   <nav class="rail" aria-label="主导航">
     <button class="rail-avatar" id="avatarBtn" title="账号"></button>
@@ -59,7 +67,7 @@
     <button class="rail-item" data-view="settings" title="设置"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.3 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2l.3 2.6h4l.3-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg></button>
   </nav>
 
-  <!-- ===== 会话列表 ===== -->
+  <!-- ===== 会话列表（仅聊天视图显示） ===== -->
   <aside class="list-pane">
     <div class="list-head">
       <h3>会话</h3>
@@ -91,7 +99,7 @@
       <div class="msg-area" id="msgArea">
         <div class="empty" id="emptyTip">
           <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
-          <span>启动后端后自动连接（<b style="color:var(--text-2)">apps/server · npm start</b>）<br>输入消息并发送，广播消息将原样回显</span>
+          <span>连接后端后自动收发（<b style="color:var(--text-2)">apps/server · npm start</b>）<br>输入消息并发送，广播消息将原样回显</span>
         </div>
       </div>
       <div class="input-bar">
@@ -101,7 +109,7 @@
       </div>
     </div>
 
-    <!-- 插件视图 -->
+    <!-- 插件视图（占满聊天区） -->
     <div class="plugin-view" id="pluginView" style="display:none">
       <div class="plugin-head">
         <span class="dot"></span>
@@ -124,10 +132,28 @@
 <script>
 (function () {
   "use strict";
-  const WS_URL = "ws://localhost:3000";
-  const $ = function (id) { return document.getElementById(id); };
-  const toastEl = $("toast");
-  let toastTimer = null;
+
+  /* ===== 服务地址：Electron 由主进程注入，H5 默认本地后端 ===== */
+  var BASE = (window.magicHub && window.magicHub.serverBase) || "http://localhost:3000";
+  var WS_URL = BASE.replace(/^http/, "ws") + "/";
+
+  /* ===== 登录门禁：必须真实登录后才能进入主界面 ===== */
+  var sessionStr = localStorage.getItem("magichub_session");
+  if (!sessionStr) {
+    location.replace("login.html");
+    return;
+  }
+  var session;
+  try { session = JSON.parse(sessionStr); } catch (e) { session = null; }
+  if (!session || !session.username) {
+    localStorage.removeItem("magichub_session");
+    location.replace("login.html");
+    return;
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var toastEl = $("toast");
+  var toastTimer = null;
   function toast(msg) {
     toastEl.textContent = msg;
     toastEl.classList.add("show");
@@ -135,41 +161,55 @@
     toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2200);
   }
 
-  /* ===== 账号与头像 ===== */
-  const user = localStorage.getItem("magichub_user");
-  const avatarBtn = $("avatarBtn");
-  if (user) {
-    avatarBtn.textContent = user.charAt(0).toUpperCase();
-    avatarBtn.title = "@" + user + " · 点击退出";
-    avatarBtn.addEventListener("click", function () {
-      localStorage.removeItem("magichub_user");
-      location.href = "login.html";
-    });
-  } else {
-    avatarBtn.textContent = "?";
-    avatarBtn.title = "未登录 · 点击去登录";
-    avatarBtn.addEventListener("click", function () { location.href = "login.html"; });
+  /* ===== 账号头像：方形圆角；点击退出登录 ===== */
+  var avatarBtn = $("avatarBtn");
+  function renderAvatar() {
+    avatarBtn.innerHTML = "";
+    if (session.avatar) {
+      var img = document.createElement("img");
+      img.src = BASE + session.avatar;
+      img.alt = session.displayName || session.username;
+      img.onerror = function () {
+        img.remove();
+        avatarBtn.textContent = (session.displayName || session.username).charAt(0).toUpperCase();
+      };
+      avatarBtn.appendChild(img);
+    } else {
+      avatarBtn.textContent = (session.displayName || session.username).charAt(0).toUpperCase();
+    }
+    avatarBtn.title = (session.displayName || session.username) + " · 点击退出登录";
   }
+  renderAvatar();
+  avatarBtn.addEventListener("click", function () {
+    localStorage.removeItem("magichub_session");
+    location.href = "login.html";
+  });
 
   /* ===== 窗口控制（Electron 下走原生，H5 下演示） ===== */
-  const native = window.magicHub || null;
+  var native = window.magicHub || null;
   $("winMin").addEventListener("click", function () { native ? native.minimize() : toast("最小化（演示）"); });
   $("winMax").addEventListener("click", function () { native ? native.maximize() : toast("最大化（演示）"); });
   $("winClose").addEventListener("click", function () { native ? native.close() : toast("关闭（演示）"); });
 
   /* ===== 导航切换（会话 / 占位视图 / 插件视图） ===== */
-  const viewTitle = $("viewTitle");
-  const chatView = $("chatView");
-  const pluginView = $("pluginView");
-  const phView = $("phView");
-  const phText = $("phText");
-  const railItems = Array.prototype.slice.call(document.querySelectorAll(".rail-item[data-view]"));
+  var viewTitle = $("viewTitle");
+  var chatView = $("chatView");
+  var pluginView = $("pluginView");
+  var phView = $("phView");
+  var phText = $("phText");
+  var appShell = $("appShell");
+  var railItems = Array.prototype.slice.call(document.querySelectorAll(".rail-item[data-view]"));
+  var pluginEntries = {}; // id -> manifest
 
+  function setListPane(show) {
+    document.body.classList.toggle("chat-mode", !!show);
+  }
   function showChat() {
     pluginView.style.display = "none";
     phView.style.display = "none";
     chatView.style.display = "flex";
     viewTitle.textContent = "会话";
+    setListPane(true);
   }
   function showPh(name) {
     pluginView.style.display = "none";
@@ -177,6 +217,7 @@
     chatView.style.display = "none";
     phText.textContent = name + " · 功能开发中，敬请期待";
     viewTitle.textContent = name;
+    setListPane(false);
   }
   function showPlugin(id, meta) {
     chatView.style.display = "none";
@@ -184,33 +225,49 @@
     pluginView.style.display = "flex";
     viewTitle.textContent = meta.name;
     $("pluginTitle").textContent = meta.name;
-    $("pluginFrame").src = "/plugins/" + id + "/" + meta.entry;
+    $("pluginFrame").src = BASE + "/plugins/" + id + "/" + meta.entry;
+    setListPane(false);
   }
+
+  function clearRailActive() {
+    railItems.forEach(function (x) { x.classList.remove("on"); });
+    document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
+  }
+
   railItems.forEach(function (item) {
     item.addEventListener("click", function () {
-      railItems.forEach(function (x) { x.classList.remove("on"); });
-      document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
+      clearRailActive();
       item.classList.add("on");
-      const v = item.getAttribute("data-view");
+      var v = item.getAttribute("data-view");
       if (v === "chat") showChat();
       else showPh(item.title || v);
     });
   });
 
-  /* ===== 插件系统：加载 /api/plugins 并渲染左侧入口 ===== */
+  /* ===== 插件系统：加载 /api/plugins 并渲染左侧入口（含 SVG 图标） ===== */
+  function pluginIconUrl(p) {
+    if (!p.icon) return null;
+    if (/^(https?:)?\/\//.test(p.icon)) return p.icon;
+    return BASE + "/plugins/" + p.id + "/" + p.icon;
+  }
   function loadPlugins() {
-    fetch("/api/plugins")
+    fetch(BASE + "/api/plugins")
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        const list = (data.ok && data.data && data.data.plugins) || [];
-        const rail = $("pluginRail");
+        var list = (data.ok && data.data && data.data.plugins) || [];
+        var rail = $("pluginRail");
         rail.innerHTML = "";
         list.forEach(function (p) {
-          const btn = document.createElement("button");
+          pluginEntries[p.id] = p;
+          var btn = document.createElement("button");
           btn.className = "rail-item";
           btn.title = p.name + "（插件）";
-          if (p.icon) {
-            btn.innerHTML = '<img src="' + p.icon + '" width="20" height="20" alt="">';
+          var icon = pluginIconUrl(p);
+          if (icon) {
+            var img = document.createElement("img");
+            img.src = icon;
+            img.alt = "";
+            btn.appendChild(img);
           } else {
             btn.textContent = p.name.charAt(0);
             btn.style.fontWeight = "800";
@@ -218,23 +275,23 @@
             btn.style.color = "var(--accent-soft)";
           }
           btn.addEventListener("click", function () {
-            railItems.forEach(function (x) { x.classList.remove("on"); });
-            document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
+            clearRailActive();
             btn.classList.add("on");
             showPlugin(p.id, p);
           });
           rail.appendChild(btn);
         });
         $("pluginSep").hidden = list.length === 0;
+        openByHash();
       })
       .catch(function () { /* 后端未启动：不渲染插件入口 */ });
   }
 
   $("pluginClose").addEventListener("click", function () {
     showChat();
-    document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
-    railItems.forEach(function (x) { x.classList.remove("on"); });
+    clearRailActive();
     railItems[0].classList.add("on");
+    if (location.hash) history.replaceState(null, "", location.pathname);
   });
 
   /* ===== 会话列表交互 ===== */
@@ -243,23 +300,39 @@
       document.querySelectorAll("#chatList .chat-item").forEach(function (x) { x.classList.remove("on"); });
       item.classList.add("on");
       $("chatName").textContent = item.getAttribute("data-name");
-      if (pluginView.style.display === "flex") {
+      if (pluginView.style.display === "flex" || phView.style.display === "flex") {
         showChat();
-        railItems.forEach(function (x) { x.classList.remove("on"); });
+        clearRailActive();
         railItems[0].classList.add("on");
       }
     });
   });
 
+  /* ===== hash 路由：#plugin/<id> 直接打开插件视图 ===== */
+  function openByHash() {
+    var m = /^#plugin\/([^/]+)/.exec(location.hash);
+    if (m && pluginEntries[m[1]]) {
+      clearRailActive();
+      var btn = document.querySelector('#pluginRail .rail-item[data-pid="' + m[1] + '"]');
+      if (btn) btn.classList.add("on");
+      showPlugin(m[1], pluginEntries[m[1]]);
+    } else {
+      showChat();
+      clearRailActive();
+      railItems[0].classList.add("on");
+    }
+  }
+  window.addEventListener("hashchange", openByHash);
+
   /* ===== WebSocket：连接 + 广播 ===== */
-  const statusEl = $("status");
-  const statusText = $("statusText");
-  const msgArea = $("msgArea");
-  const input = $("input");
-  const sendBtn = $("sendBtn");
-  const emptyTip = $("emptyTip");
-  let ws = null;
-  let retryTimer = null;
+  var statusEl = $("status");
+  var statusText = $("statusText");
+  var msgArea = $("msgArea");
+  var input = $("input");
+  var sendBtn = $("sendBtn");
+  var emptyTip = $("emptyTip");
+  var ws = null;
+  var retryTimer = null;
 
   function setStatus(state, text) {
     statusEl.classList.remove("on", "err");
@@ -269,7 +342,7 @@
   }
   function addSystem(text) {
     emptyTip.style.display = "none";
-    const div = document.createElement("div");
+    var div = document.createElement("div");
     div.className = "system";
     div.textContent = text;
     msgArea.appendChild(div);
@@ -277,9 +350,9 @@
   }
   function addMessage(text, mine) {
     emptyTip.style.display = "none";
-    const div = document.createElement("div");
+    var div = document.createElement("div");
     div.className = "msg " + (mine ? "out" : "in");
-    const bubble = document.createElement("div");
+    var bubble = document.createElement("div");
     bubble.className = "bubble";
     bubble.textContent = text;
     div.appendChild(bubble);
@@ -298,8 +371,8 @@
       addSystem("已连接到 MagicHub 服务，等待 hello…");
     };
     ws.onmessage = function (ev) {
-      let frame;
-      try { frame = JSON.parse(ev.data); } catch { return; }
+      var frame;
+      try { frame = JSON.parse(ev.data); } catch (e) { return; }
       if (frame.type === "hello") {
         addSystem("服务端握手成功：" + (frame.msg || ""));
       } else if (frame.type === "broadcast") {
@@ -315,7 +388,7 @@
     ws.onerror = function () { /* onclose 统一处理 */ };
   }
   function send() {
-    const text = input.value.trim();
+    var text = input.value.trim();
     if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
     addMessage(text, true);
     ws.send(text);
@@ -328,6 +401,7 @@
   });
 
   loadPlugins();
+  openByHash();
   connect();
 })();
 </script>
