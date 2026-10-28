@@ -5,15 +5,16 @@
    依赖 theme.css 中的设计 Token（--primary / --grad / --surface 等）
    ============================================================ */
 
-/* ---------- 1. 应用外壳（三栏布局） ---------- */
+/* ---------- 1. 应用外壳（动态两栏/三栏：rail 固定 + 内容区自适应） ---------- */
 .app-shell{
-  display:grid;grid-template-columns:56px 1fr;height:520px;border-radius:18px;
+  display:flex;height:520px;border-radius:18px;
   border:1px solid var(--border);background:var(--bg-soft);box-shadow:var(--shadow);overflow:hidden;
 }
-@media(min-width:820px){.app-shell{grid-template-columns:64px 272px 1fr}}
+.app-main{flex:1;display:flex;min-width:0}
 
 /* ---------- 2. 导航栏 ---------- */
-.rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;background:var(--bg-soft);border-right:1px solid var(--border)}
+.rail{flex:none;width:56px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;background:var(--bg-soft);border-right:1px solid var(--border)}
+@media(min-width:820px){.rail{width:64px}}
 .rail .logo-badge{width:34px;height:34px;margin-bottom:10px}
 .rail .rail-item{position:relative;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:var(--text-3);transition:.2s}
 .rail .rail-item:hover{color:var(--accent-soft);background:rgba(124,58,237,.14)}
@@ -21,9 +22,8 @@
 .rail .rail-item.on::before{content:"";position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:3px;height:18px;border-radius:3px;background:var(--accent)}
 .rail .rail-sep{width:24px;height:1px;background:var(--border);margin:6px 0}
 
-/* ---------- 3. 会话列表 ---------- */
-.list-pane{display:none;flex-direction:column;min-width:0;border-right:1px solid var(--border);background:var(--bg-soft)}
-@media(min-width:820px){.list-pane{display:flex}}
+/* ---------- 3. 会话列表（仅聊天视图由 body.chat-mode 显示，其余视图整块内容占满） ---------- */
+.list-pane{display:none;flex-direction:column;flex:none;width:272px;min-width:0;border-right:1px solid var(--border);background:var(--bg-soft)}
 .list-head{padding:14px 14px 8px;display:flex;flex-direction:column;gap:10px}
 .list-head h3{font-size:14px;font-weight:800}
 .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:8px 12px}
@@ -46,8 +46,8 @@
 .badge{background:var(--grad);color:#fff;font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;flex:none;box-shadow:0 2px 8px rgba(124,58,237,.55)}
 .unread{background:var(--grad);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;box-shadow:0 2px 8px rgba(124,58,237,.5)}
 
-/* ---------- 4. 聊天主区 ---------- */
-.chat-pane{display:flex;flex-direction:column;min-width:0;background:var(--bg-soft)}
+/* ---------- 4. 聊天主区（聊天视图占满内容区） ---------- */
+.chat-pane{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-soft)}
 .chat-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
 .chat-head .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(168,85,247,.8)}
 .chat-head h4{font-size:14px;font-weight:700}
