@@ -34,6 +34,7 @@ function seedPlugins() {
   try {
     fs.mkdirSync(pluginsRoot, { recursive: true });
     fs.mkdirSync(path.join(pluginsRoot, ".meta"), { recursive: true });
+    fs.mkdirSync(path.join(pluginsRoot, ".icons"), { recursive: true });
     if (!fs.existsSync(bundledPlugins) || !fs.existsSync(sevenZip)) return;
     for (const name of fs.readdirSync(bundledPlugins)) {
       const src = path.join(bundledPlugins, name);
@@ -42,13 +43,29 @@ function seedPlugins() {
       if (!fs.existsSync(mf)) continue;
       const pack = path.join(pluginsRoot, name + ".7z");
       const metaFile = path.join(pluginsRoot, ".meta", name + ".json");
-      if (fs.existsSync(pack) && fs.existsSync(metaFile)) continue; // 已存在（用户可能已更新/删除过）不覆盖
-      // 打 .7z：在插件目录内打包，保证包根就是插件内容
-      execFileSync(sevenZip, ["a", "-t7z", "-mx=5", "-y", "-bso0", "-bsp0", pack, "*"], {
-        cwd: src, windowsHide: true, stdio: "pipe",
-      });
-      // 写市场元数据（内置：system / 公开 + manifest 快照）
       const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+      // 图标：从包内/内置源码提取到 .icons/<name><ext>，市场列表直接引用
+      const iconName = m.icon || "";
+      const iconBase = iconName ? path.basename(String(iconName).split("?")[0]) : "";
+      const iconDest = iconBase
+        ? path.join(pluginsRoot, ".icons", name + path.extname(iconBase))
+        : null;
+      const iconOk = iconDest && fs.existsSync(iconDest);
+      if (fs.existsSync(pack) && fs.existsSync(metaFile) && iconOk) continue; // 已存在（用户可能已更新/删除过）不覆盖
+      if (!fs.existsSync(pack)) {
+        // 打 .7z：在插件目录内打包，保证包根就是插件内容
+        execFileSync(sevenZip, ["a", "-t7z", "-mx=5", "-y", "-bso0", "-bsp0", pack, "*"], {
+          cwd: src, windowsHide: true, stdio: "pipe",
+        });
+      }
+      // 补提取图标（即使包已存在）
+      if (iconDest && !iconOk) {
+        const iconSrc = path.join(src, iconBase);
+        if (fs.existsSync(iconSrc) && fs.statSync(iconSrc).isFile()) {
+          fs.copyFileSync(iconSrc, iconDest);
+        }
+      }
+      // 写市场元数据（内置：system / 公开 + manifest 快照）
       fs.writeFileSync(metaFile, JSON.stringify({
         author: "system", public: true, uploadedAt: 0,
         manifest: {

@@ -591,6 +591,8 @@
   /* ===== 插件系统：本地已装优先加载，服务器市场可下载 ===== */
   function pluginIconUrl(p) {
     if (!p.icon) return null;
+    // 服务端已提取的图标（上传 .7z 时从包内提取到 .icons/，无需解压）
+    if (p.iconUrl) return BASE + p.iconUrl;
     if (/^(https?:)?\/\//.test(p.icon)) return p.icon;
     if (p.localEntry) return "file:///" + (p.localEntry.slice("file:///".length).split("/").slice(0, -1).join("/") + "/" + p.icon);
     return BASE + "/plugins/" + p.id + "/" + p.icon;

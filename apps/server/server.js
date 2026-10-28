@@ -75,6 +75,32 @@ const PLUGIN_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
 function pluginMetaPath(id) { return join(PLUGINS_ROOT, ".meta", id + ".json"); }
 function pluginArchivePath(id) { return join(PLUGINS_ROOT, id + ".7z"); }
+/** 插件图标提取目录：上传/种子的 .7z 内的 icon 文件会被提取到 .icons/<id>.<ext>，供列表直接引用 */
+function pluginIconDir() { return join(PLUGINS_ROOT, ".icons"); }
+function pluginIconPath(id, ext) { return join(PLUGINS_ROOT, ".icons", id + (ext || "")); }
+/** 找该插件已提取的图标文件（返回绝对路径，无则 null） */
+function findPluginIcon(id) {
+  const dir = pluginIconDir();
+  if (!existsSync(dir)) return null;
+  for (const f of readdirSync(dir)) {
+    if (f === id || f.startsWith(id + ".")) return join(dir, f);
+  }
+  return null;
+}
+/** 把插件目录内 manifest.icon 指向的文件复制到 .icons/<id><ext>（防路径穿越，仅取 basename） */
+function extractPluginIcon(id, pluginDir, iconName) {
+  if (!iconName || typeof iconName !== "string") return;
+  const base = basename(String(iconName).split("?")[0]);
+  if (!/^[a-zA-Z0-9_.\-]+$/.test(base)) return;
+  const src = join(pluginDir, base);
+  if (!existsSync(src) || !statSync(src).isFile()) return;
+  try {
+    mkdirSync(pluginIconDir(), { recursive: true });
+    copyFileSync(src, pluginIconPath(id, extname(base)));
+  } catch (err) {
+    console.error(`[plugins] 提取 ${id} 图标失败: ${err.message}`);
+  }
+}
 
 /** 读取插件市场元信息（默认：内置/公开） */
 function readPluginMeta(id) {
@@ -145,6 +171,7 @@ function listPlugins() {
     if (!m) continue;
     const id = m[1];
     const meta = readPluginMeta(id);
+    const iconFile = findPluginIcon(id);
     out.push({
       id,
       name: (meta.manifest && meta.manifest.name) || id,
@@ -152,6 +179,7 @@ function listPlugins() {
       description: (meta.manifest && meta.manifest.description) || "",
       entry: (meta.manifest && meta.manifest.entry) || "index.html",
       icon: (meta.manifest && meta.manifest.icon) || "",
+      iconUrl: iconFile ? "/icons/" + basename(iconFile) : "",
       author: meta.author || "system",
       public: meta.public !== false,
       uploadedAt: meta.uploadedAt || 0,
@@ -168,6 +196,7 @@ function listPlugins() {
     try {
       const m = JSON.parse(readFileSync(mf, "utf8"));
       const meta = readPluginMeta(dir);
+      const iconFile = findPluginIcon(dir);
       out.push({
         id: dir,
         name: m.name || dir,
@@ -175,6 +204,7 @@ function listPlugins() {
         description: m.description || "",
         entry: m.entry || "index.html",
         icon: m.icon || "",
+        iconUrl: iconFile ? "/icons/" + basename(iconFile) : (m.icon ? "/plugins/" + encodeURIComponent(dir) + "/" + m.icon : ""),
         author: meta.author || "system",
         public: meta.public !== false,
         uploadedAt: meta.uploadedAt || 0,
@@ -246,6 +276,8 @@ async function uploadPlugin(username, payload) {
       },
     };
     writeFileSync(pluginMetaPath(id), JSON.stringify(meta, null, 2));
+    // 提取 .7z 内的图标到 .icons/（市场列表直接引用，无需解压包）
+    extractPluginIcon(id, root, v.manifest.icon);
   } catch (err) {
     rmSync(tmpRoot, { recursive: true, force: true });
     return { ok: false, error: { code: "INTERNAL", message: "插件入库失败：" + err.message } };
@@ -267,6 +299,8 @@ function removePlugin(id, username) {
   }
   rmSync(pluginArchivePath(id), { force: true });
   rmSync(pluginMetaPath(id), { force: true });
+  const iconFile = findPluginIcon(id);
+  if (iconFile) rmSync(iconFile, { force: true });
   rmSync(join(PLUGINS_ROOT, id), { recursive: true, force: true }); // 兼容旧源码目录
   console.log(`[plugins] ${username} 删除插件: ${id}`);
   return { ok: true };
@@ -670,6 +704,12 @@ const httpServer = createServer(async (req, res) => {
     // ---- 插件资源：/plugins/<id>/<path> ----
     if (urlPath.startsWith("/plugins/")) {
       return await serveStatic(res, resolvePluginPath(urlPath.slice("/plugins/".length)));
+    }
+
+    // ---- 插件图标：/icons/<file>（上传时从 .7z 提取到 .icons/） ----
+    if (urlPath.startsWith("/icons/")) {
+      const file = resolveInRoot(pluginIconDir(), urlPath.slice("/icons/".length));
+      return await serveStatic(res, file);
     }
 
     // ---- 头像：/avatars/<file> ----
