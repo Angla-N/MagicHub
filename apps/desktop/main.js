@@ -50,6 +50,26 @@ function httpOk(port) {
   });
 }
 
+/** 端口上是否已是 MagicHub 服务器（同机复用，避免多实例各起后端导致消息不互通） */
+function magicHubAlive(port) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: "127.0.0.1", port, path: "/api/plugins", timeout: 1200 }, (res) => {
+      let body = "";
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(body);
+          resolve(!!j && (j.ok === true || !!j.data));
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
+}
+
 /** 启动内置 Node 服务，等待可访问 */
 async function startServer(port) {
   const serverDir = app.isPackaged
@@ -116,10 +136,17 @@ ipcMain.handle("win:maximize", () => {
 ipcMain.handle("win:close", () => win && win.close());
 
 app.whenReady().then(async () => {
-  serverPort = await pickPort();
-  const ok = await startServer(serverPort);
-  if (!ok) {
-    console.error("[magichub] 内置服务未能启动，端口 " + serverPort + " 无法访问");
+  // 同机已有一个 MagicHub 实例在 3000 提供服务：直接复用（同一 userData、同一 WS 服务），
+  // 避免第二个实例另起 3001 后端导致两个窗口的 WebSocket 推送互相隔离、消息不实时同步
+  if (await magicHubAlive(3000)) {
+    serverPort = 3000;
+    console.log("[magichub] 检测到已有实例，复用 127.0.0.1:" + serverPort);
+  } else {
+    serverPort = await pickPort();
+    const ok = await startServer(serverPort);
+    if (!ok) {
+      console.error("[magichub] 内置服务未能启动，端口 " + serverPort + " 无法访问");
+    }
   }
   createWindow();
 

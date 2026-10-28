@@ -27,6 +27,17 @@
   .brand-feats svg{width:22px;height:22px;flex:none;color:var(--accent-soft);
     filter:drop-shadow(0 0 10px rgba(167,139,250,.45))}
   .brand-foot{margin-top:44px;font-size:12px;color:var(--text-3);letter-spacing:1px}
+  /* 服务器地址配置：放在品牌区底部，不占用登录表单 */
+  .brand-server{margin-top:18px;max-width:340px}
+  .brand-server label{display:block;font-size:12px;color:var(--text-3);margin-bottom:8px;letter-spacing:.5px}
+  .server-row{display:flex;align-items:center;gap:10px;background:rgba(30,30,30,.66);
+    border:1px solid var(--border);border-radius:12px;padding:6px 12px;
+    transition:border-color .2s,box-shadow .2s}
+  .server-row:focus-within{border-color:rgba(167,139,250,.55);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
+  .server-row svg{width:18px;height:18px;flex:none;color:var(--text-3)}
+  .server-row .input{flex:1;min-width:0;background:none;border:none;box-shadow:none;padding:7px 0;font-size:13px;color:var(--text-1)}
+  .server-row .input:focus{outline:none}
+  .server-tip{font-size:11px;color:var(--text-3);margin-top:7px;line-height:1.5}
   .auth-card-col{flex:0 0 420px}
   .auth-card{background:rgba(37,37,38,.78);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);
     border-radius:20px;padding:34px 34px 30px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
@@ -45,7 +56,6 @@
   .avatar-tip{font-size:11px;color:var(--text-3);line-height:1.5}
   .avatar-preview{width:64px;height:64px;border-radius:14px;object-fit:cover;display:none}
   #avatarInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-  .server-tip{font-size:11px;color:var(--text-3);margin-top:5px;line-height:1.5}
   .last-login{margin-top:2px;padding:8px 12px;border-radius:10px;background:rgba(124,58,237,.12);
     border:1px solid rgba(124,58,237,.32);color:var(--text-2);font-size:12px}
   .last-login b{color:var(--accent-soft)}
@@ -74,6 +84,15 @@
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>内置服务器，开箱即用</span></li>
       </ul>
       <div class="brand-foot">MagicHub v1.0 · 深紫星云版</div>
+      <div class="brand-server">
+        <label for="server">服务器地址</label>
+        <div class="server-row">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <input class="input" id="server" name="server" autocomplete="off" spellcheck="false"
+                 placeholder="http://localhost:3000">
+        </div>
+        <div class="server-tip">默认连接本机；连其他机器时填服务器 IP，如 http://192.168.1.100:3000</div>
+      </div>
     </section>
 
     <!-- 右侧登录 / 注册卡片 -->
@@ -116,13 +135,6 @@
         <label for="password">密码</label>
         <input class="input" id="password" name="password" type="password" autocomplete="current-password"
                placeholder="至少 6 位" maxlength="64">
-      </div>
-
-      <div class="field">
-        <label for="server">服务器地址</label>
-        <input class="input" id="server" name="server" autocomplete="off" spellcheck="false"
-               placeholder="http://localhost:3000">
-        <div class="server-tip">默认连接本机；也可填部署服务器 IP，如 http://192.168.1.100:3000</div>
       </div>
 
       <div class="last-login" id="lastLogin" hidden>上次登录：<b id="lastLoginName"></b>，请输入密码登录</div>
