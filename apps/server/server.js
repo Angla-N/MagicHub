@@ -3,10 +3,11 @@
  *
  * 能力：
  *  1. 账号 API：POST /api/register（用户名/名字/密码/头像）、POST /api/login（返回 token）、GET /api/me
- *  2. 插件 API：GET /api/plugins（扫描 plugins/）、/plugins/<id>/ 静态服务
- *  3. 头像静态服务：/avatars/<file>
- *  4. WebSocket 服务：连接即 hello，收到消息原样广播（连通验证）
- *  5. CORS：允许前端独立部署（H5 或 Electron file://）跨域调用
+ *  2. 聊天 API：通讯录 /api/users、好友 /api/friends(+add)、会话 /api/conversations、消息 /api/messages
+ *  3. 插件 API：GET /api/plugins（扫描 plugins/）、/plugins/<id>/ 静态服务
+ *  4. 头像静态服务：/avatars/<file>
+ *  5. WebSocket：客户端先发 {type:"auth",token} 绑定身份，新消息定向推送给会话对方
+ *  6. CORS：允许前端独立部署（H5 或 Electron file://）跨域调用
  *
  * 启动：
  *  cd apps/server
@@ -25,6 +26,9 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import { ensureStore, register, login, getUser, AVATARS_DIR } from "./lib/user-store.js";
+import {
+  listUsers, listFriends, addFriend, listConversations, getMessages, addMessage, peerOf,
+} from "./lib/chat-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -226,6 +230,32 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
+    // ---- 聊天 API：加好友 / 发消息（POST，需登录） ----
+    if (method === "POST" && (urlPath === "/api/friends/add" || urlPath === "/api/messages")) {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      let payload;
+      try {
+        const raw = await readBody(req);
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
+      }
+      let result;
+      if (urlPath === "/api/friends/add") {
+        result = addFriend(username, payload.username);
+      } else {
+        result = addMessage(payload.convId, username, payload.text);
+        if (result.ok) {
+          const peer = peerOf(payload.convId, username);
+          if (peer) pushToPeer(peer, { type: "message", data: { convId: payload.convId, msg: result.data.msg } });
+        }
+      }
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
     if (method !== "GET" && method !== "HEAD") {
       return sendJson(res, 405, { ok: false, error: { code: "METHOD_NOT_ALLOWED", message: "不支持的方法" } });
     }
@@ -237,6 +267,33 @@ const httpServer = createServer(async (req, res) => {
         return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
       }
       return sendJson(res, 200, { ok: true, data: getUser(username) });
+    }
+
+    // ---- 聊天 API：通讯录 / 好友 / 会话 / 消息历史（GET，需登录） ----
+    if (urlPath === "/api/users" || urlPath === "/api/friends" || urlPath === "/api/conversations" || urlPath === "/api/messages") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      if (urlPath === "/api/users") {
+        return sendJson(res, 200, { ok: true, data: { users: listUsers(username) } });
+      }
+      if (urlPath === "/api/friends") {
+        return sendJson(res, 200, { ok: true, data: { friends: listFriends(username) } });
+      }
+      if (urlPath === "/api/conversations") {
+        return sendJson(res, 200, { ok: true, data: { conversations: listConversations(username) } });
+      }
+      const qs = new URLSearchParams((req.url || "").split("?")[1] || "");
+      const conv = qs.get("conv");
+      if (!conv) {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "缺少 conv 参数" } });
+      }
+      const messages = getMessages(conv, username);
+      if (!messages) {
+        return sendJson(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问（请先添加好友）" } });
+      }
+      return sendJson(res, 200, { ok: true, data: { messages } });
     }
 
     // ---- 插件 API：插件列表 ----
@@ -262,33 +319,50 @@ const httpServer = createServer(async (req, res) => {
   }
 });
 
-/* ================= WebSocket：连接 + 广播 ================= */
+/* ================= WebSocket：登录认证 + 定向推送 ================= */
 
 const wss = new WebSocketServer({ server: httpServer });
+const wsClients = new Map(); // username -> ws（在线连接）
+
+/** 定向推送给指定用户（对方在线则实时送达） */
+function pushToPeer(username, frame) {
+  const target = wsClients.get(username);
+  if (target && target.readyState === WebSocket.OPEN) {
+    target.send(JSON.stringify(frame));
+  }
+}
 
 wss.on("connection", (ws) => {
   console.log(`[ws] client connected (total: ${wss.clients.size})`);
 
-  ws.send(JSON.stringify({ type: "hello", msg: "已连接 MagicHub 服务" }));
+  ws.username = null;
 
   ws.on("message", (data) => {
-    const text = data.toString();
-    console.log(`[ws] recv: ${text}`);
-    const frame = JSON.stringify({ type: "broadcast", text });
-    for (const client of wss.clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(frame);
+    let frame;
+    try {
+      frame = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+    if (frame && frame.type === "auth" && frame.token) {
+      const s = sessions.get(String(frame.token));
+      if (s && s.expiresAt >= Date.now()) {
+        ws.username = s.username;
+        wsClients.set(ws.username, ws);
+        ws.send(JSON.stringify({ type: "auth_ok", username: ws.username }));
+        console.log(`[ws] ${ws.username} 已认证（在线 ${wsClients.size}）`);
+      } else {
+        ws.send(JSON.stringify({ type: "auth_fail", message: "登录已过期，请重新登录" }));
       }
     }
   });
 
   ws.on("close", () => {
-    console.log(`[ws] client disconnected (total: ${wss.clients.size})`);
+    if (ws.username) wsClients.delete(ws.username);
+    console.log(`[ws] client disconnected (online: ${wsClients.size})`);
   });
 
-  ws.on("error", (err) => {
-    console.error(`[ws] error: ${err.message}`);
-  });
+  ws.on("error", () => { /* close 统一处理 */ });
 });
 
 httpServer.listen(PORT, () => {

@@ -30,9 +30,29 @@
   .plugin-head h4{font-size:14px;font-weight:700}
   .plugin-frame{flex:1;min-height:0;border:none;background:var(--bg)}
 
-  /* 占位视图（联系人/文件/通知/设置 演示） */
-  .ph-view{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;min-width:0}
+  /* 占位视图（设置 演示） */
+  .ph-view{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;min-width:0;flex:1}
   .ph-view svg{opacity:.6}
+
+  /* —— 通讯录视图（所有用户，只能查看与加好友，不能发消息） —— */
+  .contacts-view{display:none;flex-direction:column;min-width:0;background:var(--bg-soft);flex:1}
+  .contacts-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none}
+  .contacts-body{flex:1;display:flex;min-height:0}
+  .c-list{flex:none;width:264px;border-right:1px solid var(--border);overflow:auto;padding:8px}
+  @media(max-width:760px){.c-list{width:100%}}
+  .c-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;transition:.18s;cursor:pointer}
+  .c-item:hover,.c-item.on{background:var(--surface-2)}
+  .c-item .ci-main{flex:1;min-width:0}
+  .c-item .ci-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-item .ci-acc{font-size:11px;color:var(--text-3)}
+  .add-btn{flex:none;font-size:11px;font-weight:600;color:#fff;background:var(--grad);border:none;border-radius:8px;padding:6px 12px;cursor:pointer;transition:.18s}
+  .add-btn:hover{filter:brightness(1.12)}
+  .add-btn.added{background:transparent;color:var(--text-3);border:1px solid var(--border);cursor:default}
+  .c-detail{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-2);font-size:13px;min-width:0;padding:24px}
+  .c-detail .big-avatar{width:96px;height:96px;border-radius:24px;background:var(--grad);color:#fff;font-size:36px;font-weight:800;display:grid;place-items:center;overflow:hidden;box-shadow:0 10px 30px rgba(124,58,237,.4)}
+  .c-detail .big-avatar img{width:100%;height:100%;object-fit:cover}
+  .c-detail .d-name{font-size:18px;font-weight:700;color:var(--text)}
+  .c-detail .d-tip{font-size:11px;color:var(--text-3)}
 </style>
 </head>
 <body>
@@ -49,14 +69,12 @@
 </header>
 
 <div class="app-shell" id="appShell">
-  <!-- ===== 左侧导航栏（QQ 风格） ===== -->
+  <!-- ===== 左侧导航栏 ===== -->
   <nav class="rail" aria-label="主导航">
     <button class="rail-avatar" id="avatarBtn" title="账号"></button>
 
     <button class="rail-item on" data-view="chat" title="会话"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg></button>
-    <button class="rail-item" data-view="contacts" title="联系人"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.4 2.6-5 5.5-5s4.9 1.6 5.5 5M16 5.6a3 3 0 0 1 0 5.4M17.6 14.4c1.6.8 2.5 2.2 2.9 4.1"/></svg></button>
-    <button class="rail-item" data-view="files" title="文件"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></button>
-    <button class="rail-item" data-view="notices" title="通知"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10 21h4"/></svg></button>
+    <button class="rail-item" data-view="contacts" title="通讯录"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.4 2.6-5 5.5-5s4.9 1.6 5.5 5M16 5.6a3 3 0 0 1 0 5.4M17.6 14.4c1.6.8 2.5 2.2 2.9 4.1"/></svg></button>
 
     <span class="rail-sep"></span>
 
@@ -70,31 +88,24 @@
   <!-- ===== 内容区：会话栏（仅聊天视图）+ 主视图 ===== -->
   <div class="app-main">
 
-  <!-- ===== 会话列表（仅聊天视图显示） ===== -->
+  <!-- ===== 会话列表（仅聊天视图显示，好友会话） ===== -->
   <aside class="list-pane">
     <div class="list-head">
       <h3>会话</h3>
       <div class="search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input placeholder="搜索会话或消息"></div>
     </div>
-    <div class="list" id="chatList">
-      <div class="chat-item on" data-name="产品设计群"><span class="avatar" style="background:linear-gradient(135deg,#7C3AED,#A855F7)">群</span><div class="c-main"><div class="c-row"><span class="c-name">产品设计群</span><span class="c-time">09:21</span></div><div class="c-prev">小狼：新版聊天界面已经更新完成</div></div><span class="badge">3</span></div>
-      <div class="chat-item" data-name="周工"><span class="avatar" style="background:linear-gradient(135deg,#2563EB,#38BDF8)">周</span><div class="c-main"><div class="c-row"><span class="c-name">周工</span><span class="c-time">昨天</span></div><div class="c-prev">收到，我这就去看。</div></div></div>
-      <div class="chat-item" data-name="MagicHub 官方"><span class="avatar" style="background:linear-gradient(135deg,#7C3AED,#A855F7)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="1.8"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 19h14"/></svg></span><div class="c-main"><div class="c-row"><span class="c-name">MagicHub 官方</span><span class="c-time">昨天</span></div><div class="c-prev">欢迎使用 MagicHub</div></div><span class="badge">1</span></div>
-      <div class="chat-item" data-name="林一"><span class="avatar" style="background:linear-gradient(135deg,#E05C8A,#F472B6)">林</span><div class="c-main"><div class="c-row"><span class="c-name">林一</span><span class="c-time">周一</span></div><div class="c-prev">会议纪要发你邮箱了</div></div></div>
-      <div class="chat-item" data-name="Rust 扩展讨论组"><span class="avatar" style="background:linear-gradient(135deg,#2FB36A,#34D399)">R</span><div class="c-main"><div class="c-row"><span class="c-name">Rust 扩展讨论组</span><span class="c-time">周一</span></div><div class="c-prev">N-API 基准测试结果</div></div><span class="badge">12</span></div>
-    </div>
+    <div class="list" id="chatList"></div>
   </aside>
 
-  <!-- ===== 聊天主区 ===== -->
+  <!-- ===== 主视图区 ===== -->
   <main class="chat-pane">
+
     <!-- 聊天视图 -->
     <div class="chat-view" id="chatView" style="display:flex;flex-direction:column;min-width:0;flex:1">
       <div class="chat-head">
         <span class="dot"></span>
-        <h4 id="chatName">产品设计群</h4>
+        <h4 id="chatName">请选择会话</h4>
         <div class="tools">
-          <button class="icon-btn" title="语音通话（演示）"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 16 0M7 12a5 5 0 0 1 10 0M10 12a2 2 0 0 1 4 0"/></svg></button>
-          <button class="icon-btn" title="文件传输（规划中）"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></button>
           <button class="icon-btn" title="更多"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
         </div>
         <div class="status" id="status"><i></i><span id="statusText">未连接</span></div>
@@ -102,13 +113,23 @@
       <div class="msg-area" id="msgArea">
         <div class="empty" id="emptyTip">
           <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V8a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
-          <span>连接后端后自动收发（<b style="color:var(--text-2)">apps/server · npm start</b>）<br>输入消息并发送，广播消息将原样回显</span>
+          <span id="emptyText">还没有好友会话<br>去「通讯录」添加好友后即可聊天</span>
         </div>
       </div>
       <div class="input-bar">
-        <button class="icon-btn" title="表情（演示）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
         <textarea id="input" placeholder="输入消息，Enter 发送" disabled></textarea>
         <button class="send" id="sendBtn" disabled>发送</button>
+      </div>
+    </div>
+
+    <!-- 通讯录视图（所有用户，只能查看/加好友，不能发消息） -->
+    <div class="contacts-view" id="contactsView">
+      <div class="contacts-head">通讯录 · 所有用户</div>
+      <div class="contacts-body">
+        <div class="c-list" id="userList"></div>
+        <div class="c-detail" id="userDetail">
+          <div class="d-tip">选择左侧用户查看资料<br>添加好友后即可在「会话」中聊天</div>
+        </div>
       </div>
     </div>
 
@@ -122,10 +143,10 @@
       <iframe class="plugin-frame" id="pluginFrame" title="插件内容" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
 
-    <!-- 占位视图（其余导航项演示） -->
-    <div class="ph-view" id="phView" style="display:none;flex:1">
+    <!-- 占位视图（设置） -->
+    <div class="ph-view" id="phView">
       <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>
-      <span id="phText">功能开发中，敬请期待</span>
+      <span id="phText">设置 · 功能开发中，敬请期待</span>
     </div>
   </main>
   </div><!-- /app-main -->
@@ -143,10 +164,7 @@
 
   /* ===== 登录门禁：必须真实登录后才能进入主界面 ===== */
   var sessionStr = localStorage.getItem("magichub_session");
-  if (!sessionStr) {
-    location.replace("login.html");
-    return;
-  }
+  if (!sessionStr) { location.replace("login.html"); return; }
   var session;
   try { session = JSON.parse(sessionStr); } catch (e) { session = null; }
   if (!session || !session.username) {
@@ -162,7 +180,13 @@
     toastEl.textContent = msg;
     toastEl.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2200);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2400);
+  }
+
+  function authHeaders(json) {
+    var h = { "Authorization": "Bearer " + session.token };
+    if (json) h["Content-Type"] = "application/json";
+    return h;
   }
 
   /* ===== 账号头像：方形圆角；点击退出登录 ===== */
@@ -173,10 +197,7 @@
       var img = document.createElement("img");
       img.src = BASE + session.avatar;
       img.alt = session.displayName || session.username;
-      img.onerror = function () {
-        img.remove();
-        avatarBtn.textContent = (session.displayName || session.username).charAt(0).toUpperCase();
-      };
+      img.onerror = function () { img.remove(); avatarBtn.textContent = (session.displayName || session.username).charAt(0).toUpperCase(); };
       avatarBtn.appendChild(img);
     } else {
       avatarBtn.textContent = (session.displayName || session.username).charAt(0).toUpperCase();
@@ -189,43 +210,53 @@
     location.href = "login.html";
   });
 
-  /* ===== 窗口控制（Electron 下走原生，H5 下演示） ===== */
+  /* ===== 窗口控制 ===== */
   var native = window.magicHub || null;
   $("winMin").addEventListener("click", function () { native ? native.minimize() : toast("最小化（演示）"); });
   $("winMax").addEventListener("click", function () { native ? native.maximize() : toast("最大化（演示）"); });
   $("winClose").addEventListener("click", function () { native ? native.close() : toast("关闭（演示）"); });
 
-  /* ===== 导航切换（会话 / 占位视图 / 插件视图） ===== */
+  /* ===== 视图切换（会话 / 通讯录 / 设置 / 插件） ===== */
   var viewTitle = $("viewTitle");
   var chatView = $("chatView");
+  var contactsView = $("contactsView");
   var pluginView = $("pluginView");
   var phView = $("phView");
   var phText = $("phText");
-  var appShell = $("appShell");
   var railItems = Array.prototype.slice.call(document.querySelectorAll(".rail-item[data-view]"));
-  var pluginEntries = {}; // id -> manifest
+  var pluginEntries = {};
 
-  function setListPane(show) {
-    document.body.classList.toggle("chat-mode", !!show);
-  }
-  function showChat() {
+  function setListPane(show) { document.body.classList.toggle("chat-mode", !!show); }
+
+  function hideAllViews() {
+    chatView.style.display = "none";
+    contactsView.style.display = "none";
     pluginView.style.display = "none";
     phView.style.display = "none";
+  }
+  function showChat() {
+    hideAllViews();
     chatView.style.display = "flex";
     viewTitle.textContent = "会话";
     setListPane(true);
+    loadConvs();
   }
-  function showPh(name) {
-    pluginView.style.display = "none";
+  function showContacts() {
+    hideAllViews();
+    contactsView.style.display = "flex";
+    viewTitle.textContent = "通讯录";
+    setListPane(false);
+    loadUsers();
+  }
+  function showSettings() {
+    hideAllViews();
     phView.style.display = "flex";
-    chatView.style.display = "none";
-    phText.textContent = name + " · 功能开发中，敬请期待";
-    viewTitle.textContent = name;
+    phText.textContent = "设置 · 功能开发中，敬请期待";
+    viewTitle.textContent = "设置";
     setListPane(false);
   }
   function showPlugin(id, meta) {
-    chatView.style.display = "none";
-    phView.style.display = "none";
+    hideAllViews();
     pluginView.style.display = "flex";
     viewTitle.textContent = meta.name;
     $("pluginTitle").textContent = meta.name;
@@ -237,18 +268,17 @@
     railItems.forEach(function (x) { x.classList.remove("on"); });
     document.querySelectorAll("#pluginRail .rail-item").forEach(function (x) { x.classList.remove("on"); });
   }
-
   railItems.forEach(function (item) {
     item.addEventListener("click", function () {
-      clearRailActive();
-      item.classList.add("on");
+      clearRailActive(); item.classList.add("on");
       var v = item.getAttribute("data-view");
       if (v === "chat") showChat();
-      else showPh(item.title || v);
+      else if (v === "contacts") showContacts();
+      else if (v === "settings") showSettings();
     });
   });
 
-  /* ===== 插件系统：加载 /api/plugins 并渲染左侧入口（含 SVG 图标） ===== */
+  /* ===== 插件系统 ===== */
   function pluginIconUrl(p) {
     if (!p.icon) return null;
     if (/^(https?:)?\/\//.test(p.icon)) return p.icon;
@@ -269,18 +299,14 @@
           var icon = pluginIconUrl(p);
           if (icon) {
             var img = document.createElement("img");
-            img.src = icon;
-            img.alt = "";
+            img.src = icon; img.alt = "";
             btn.appendChild(img);
           } else {
             btn.textContent = p.name.charAt(0);
-            btn.style.fontWeight = "800";
-            btn.style.fontSize = "14px";
-            btn.style.color = "var(--accent-soft)";
+            btn.style.fontWeight = "800"; btn.style.fontSize = "14px"; btn.style.color = "var(--accent-soft)";
           }
           btn.addEventListener("click", function () {
-            clearRailActive();
-            btn.classList.add("on");
+            clearRailActive(); btn.classList.add("on");
             showPlugin(p.id, p);
           });
           rail.appendChild(btn);
@@ -288,53 +314,261 @@
         $("pluginSep").hidden = list.length === 0;
         openByHash();
       })
-      .catch(function () { /* 后端未启动：不渲染插件入口 */ });
+      .catch(function () { /* 后端未启动 */ });
   }
-
   $("pluginClose").addEventListener("click", function () {
-    showChat();
-    clearRailActive();
-    railItems[0].classList.add("on");
+    showChat(); clearRailActive(); railItems[0].classList.add("on");
     if (location.hash) history.replaceState(null, "", location.pathname);
   });
 
-  /* ===== 会话列表交互 ===== */
-  document.querySelectorAll("#chatList .chat-item").forEach(function (item) {
-    item.addEventListener("click", function () {
-      document.querySelectorAll("#chatList .chat-item").forEach(function (x) { x.classList.remove("on"); });
-      item.classList.add("on");
-      $("chatName").textContent = item.getAttribute("data-name");
-      if (pluginView.style.display === "flex" || phView.style.display === "flex") {
-        showChat();
-        clearRailActive();
-        railItems[0].classList.add("on");
-      }
-    });
-  });
-
-  /* ===== hash 路由：#plugin/<id> 直接打开插件视图 ===== */
+  /* ===== hash 路由：#plugin/<id> / #contacts / #settings ===== */
   function openByHash() {
     var m = /^#plugin\/([^/]+)/.exec(location.hash);
     if (m && pluginEntries[m[1]]) {
       clearRailActive();
-      var btn = document.querySelector('#pluginRail .rail-item[data-pid="' + m[1] + '"]');
-      if (btn) btn.classList.add("on");
       showPlugin(m[1], pluginEntries[m[1]]);
-    } else {
-      showChat();
-      clearRailActive();
-      railItems[0].classList.add("on");
+      return;
     }
+    if (location.hash === "#contacts") {
+      clearRailActive();
+      railItems[1].classList.add("on");
+      showContacts();
+      return;
+    }
+    if (location.hash === "#settings") {
+      clearRailActive();
+      railItems[railItems.length - 1].classList.add("on");
+      showSettings();
+      return;
+    }
+    showChat(); clearRailActive(); railItems[0].classList.add("on");
   }
   window.addEventListener("hashchange", openByHash);
 
-  /* ===== WebSocket：连接 + 广播 ===== */
+  /* ===== 工具：头像与时间 ===== */
+  function avatarHTML(u) {
+    var letter = (u.displayName || u.username).charAt(0).toUpperCase();
+    if (u.avatar) {
+      return '<span class="avatar" style="background:var(--grad)"><img src="' + BASE + u.avatar + '" alt="" onerror="this.parentNode.textContent=\'' + letter + '\'"></span>';
+    }
+    return '<span class="avatar" style="background:var(--grad)">' + letter + '</span>';
+  }
+  function fmtTime(ts) {
+    if (!ts) return "";
+    var d = new Date(ts), now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    }
+    var yest = new Date(now); yest.setDate(now.getDate() - 1);
+    if (d.toDateString() === yest.toDateString()) return "昨天";
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + "月" + d.getDate() + "日";
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  }
+
+  /* ===== 会话列表（好友会话，最后消息预览） ===== */
+  var chatList = $("chatList");
+  var activeConv = null;
+  var convMeta = {}; // convId -> { id, peer }
+
+  function loadConvs() {
+    fetch(BASE + "/api/conversations", { headers: authHeaders() })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var convs = (data.ok && data.data && data.data.conversations) || [];
+        convMeta = {};
+        chatList.innerHTML = "";
+        if (convs.length === 0) {
+          chatList.innerHTML = '<div class="c-prev" style="padding:16px;text-align:center;color:var(--text-3)">暂无会话<br>去「通讯录」添加好友</div>';
+          return;
+        }
+        convs.forEach(function (c) {
+          convMeta[c.id] = c;
+          var el = document.createElement("div");
+          el.className = "chat-item" + (c.id === activeConv ? " on" : "");
+          el.setAttribute("data-conv", c.id);
+          var last = c.last ? (c.last.from === session.username ? "我：" : "") + c.last.text : "你们已成为好友，开始聊天吧";
+          el.innerHTML = avatarHTML(c.peer) +
+            '<div class="c-main"><div class="c-row"><span class="c-name">' + (c.peer.displayName || c.peer.username) + '</span>' +
+            '<span class="c-time">' + fmtTime(c.last && c.last.ts) + '</span></div>' +
+            '<div class="c-prev"></div></div>';
+          el.querySelector(".c-prev").textContent = last;
+          el.addEventListener("click", function () { openConv(c.id); });
+          chatList.appendChild(el);
+        });
+      })
+      .catch(function () { /* 后端未启动 */ });
+  }
+
+  /* ===== 打开会话：加载历史 + 可发送 ===== */
+  function openConv(convId) {
+    activeConv = convId;
+    Array.prototype.forEach.call(chatList.children, function (el) {
+      el.classList.toggle("on", el.getAttribute("data-conv") === convId);
+    });
+    var meta = convMeta[convId];
+    if (meta) $("chatName").textContent = meta.peer.displayName || meta.peer.username;
+
+    var area = $("msgArea");
+    var empty = $("emptyTip");
+    // 只清历史消息气泡，保留 emptyTip 占位节点（后续渲染依赖它）
+    area.querySelectorAll(".msg").forEach(function (el) { el.remove(); });
+    empty.style.display = "none";
+
+    fetch(BASE + "/api/messages?conv=" + encodeURIComponent(convId), { headers: authHeaders() })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          empty.style.display = "";
+          $("emptyText").textContent = (data.error && data.error.message) || "无法加载消息";
+          return;
+        }
+        var msgs = data.data.messages || [];
+        if (msgs.length === 0) {
+          empty.style.display = "";
+          $("emptyText").textContent = "你们已成为好友，发一条消息打个招呼吧";
+          return;
+        }
+        msgs.forEach(function (m) { appendMsg(m, m.from === session.username); });
+        area.scrollTop = area.scrollHeight;
+      })
+      .catch(function () { empty.style.display = ""; });
+
+    var connected = ws && ws.readyState === WebSocket.OPEN;
+    $("input").disabled = !connected;
+    $("sendBtn").disabled = !connected;
+  }
+
+  function appendMsg(m, mine) {
+    var area = $("msgArea");
+    $("emptyTip").style.display = "none";
+    var div = document.createElement("div");
+    div.className = "msg " + (mine ? "out" : "in");
+    var bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = m.text;
+    var time = document.createElement("div");
+    time.className = "msg-time";
+    time.textContent = fmtTime(m.ts);
+    div.appendChild(bubble);
+    div.appendChild(time);
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  /* ===== 发送消息 ===== */
+  function send() {
+    var input = $("input");
+    var text = input.value.trim();
+    if (!text || !activeConv || !ws || ws.readyState !== WebSocket.OPEN) return;
+    input.value = "";
+    fetch(BASE + "/api/messages", {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify({ convId: activeConv, text: text }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          appendMsg(data.data.msg, true);
+          loadConvs();
+        } else {
+          toast((data.error && data.error.message) || "发送失败");
+        }
+      })
+      .catch(function () { toast("发送失败，请检查后端服务"); });
+  }
+  $("sendBtn").addEventListener("click", send);
+  $("input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  /* ===== 通讯录：所有用户（只能查看/加好友，不能发消息） ===== */
+  var userListEl = $("userList");
+  var userDetailEl = $("userDetail");
+  var selectedUser = null;
+
+  function renderDetail(u) {
+    var letter = (u.displayName || u.username).charAt(0).toUpperCase();
+    var avatarHtml = u.avatar
+      ? '<div class="big-avatar" style="background:var(--grad)"><img src="' + BASE + u.avatar + '" alt="" onerror="this.remove()"></div>'
+      : '<div class="big-avatar">' + letter + '</div>';
+    var btn = u.isFriend
+      ? '<button class="add-btn added" disabled>已添加好友</button>'
+      : '<button class="add-btn" id="detailAdd">添加好友</button>';
+    userDetailEl.innerHTML = avatarHtml +
+      '<div class="d-name">' + (u.displayName || u.username) + '</div>' +
+      '<div class="d-tip">账号：' + u.username + '</div>' +
+      '<div class="d-tip">' + (u.isFriend ? "你们已是好友，可在「会话」中聊天" : "添加好友后，即可在「会话」中聊天") + '</div>' + btn;
+    var addBtn = $("detailAdd");
+    if (addBtn) addBtn.addEventListener("click", function () { addFriend(u.username); });
+  }
+
+  function loadUsers() {
+    fetch(BASE + "/api/users", { headers: authHeaders() })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var users = (data.ok && data.data && data.data.users) || [];
+        userListEl.innerHTML = "";
+        if (users.length === 0) {
+          userListEl.innerHTML = '<div class="c-prev" style="padding:16px;text-align:center;color:var(--text-3)">暂无其他用户</div>';
+          return;
+        }
+        users.forEach(function (u) {
+          var el = document.createElement("div");
+          el.className = "c-item";
+          el.innerHTML = avatarHTML(u) +
+            '<div class="ci-main"><div class="ci-name">' + (u.displayName || u.username) + '</div>' +
+            '<div class="ci-acc">' + u.username + '</div></div>' +
+            (u.isFriend
+              ? '<button class="add-btn added" disabled>已添加</button>'
+              : '<button class="add-btn" data-add="' + u.username + '">添加</button>');
+          el.addEventListener("click", function () {
+            Array.prototype.forEach.call(userListEl.children, function (x) { x.classList.remove("on"); });
+            el.classList.add("on");
+            selectedUser = u;
+            renderDetail(u);
+          });
+          var addBtn = el.querySelector("[data-add]");
+          if (addBtn) addBtn.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            addFriend(u.username);
+          });
+          userListEl.appendChild(el);
+        });
+        if (selectedUser) {
+          var match = users.filter(function (u) { return u.username === selectedUser.username; })[0];
+          if (match) { selectedUser = match; renderDetail(match); }
+        }
+      })
+      .catch(function () { /* 后端未启动 */ });
+  }
+
+  function addFriend(username) {
+    fetch(BASE + "/api/friends/add", {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify({ username: username }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          toast("已添加好友，去「会话」开始聊天吧");
+          loadUsers();
+          loadConvs();
+        } else {
+          toast((data.error && data.error.message) || "添加失败");
+        }
+      })
+      .catch(function () { toast("添加失败，请检查后端服务"); });
+  }
+
+  /* ===== WebSocket：认证 + 新消息推送 ===== */
   var statusEl = $("status");
   var statusText = $("statusText");
   var msgArea = $("msgArea");
+  var emptyTip = $("emptyTip");
   var input = $("input");
   var sendBtn = $("sendBtn");
-  var emptyTip = $("emptyTip");
   var ws = null;
   var retryTimer = null;
 
@@ -344,68 +578,47 @@
     if (state === "err") statusEl.classList.add("err");
     statusText.textContent = text;
   }
-  function addSystem(text) {
-    emptyTip.style.display = "none";
-    var div = document.createElement("div");
-    div.className = "system";
-    div.textContent = text;
-    msgArea.appendChild(div);
-    msgArea.scrollTop = msgArea.scrollHeight;
+  function setInputEnabled(en) {
+    input.disabled = !en;
+    sendBtn.disabled = !en;
   }
-  function addMessage(text, mine) {
-    emptyTip.style.display = "none";
-    var div = document.createElement("div");
-    div.className = "msg " + (mine ? "out" : "in");
-    var bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.textContent = text;
-    div.appendChild(bubble);
-    msgArea.appendChild(div);
-    msgArea.scrollTop = msgArea.scrollHeight;
-  }
+
   function connect() {
     clearTimeout(retryTimer);
     setStatus("", "连接中…");
     ws = new WebSocket(WS_URL);
     ws.onopen = function () {
-      setStatus("on", "已连接");
-      input.disabled = false;
-      sendBtn.disabled = false;
-      input.focus();
-      addSystem("已连接到 MagicHub 服务，等待 hello…");
+      setStatus("", "认证中…");
+      ws.send(JSON.stringify({ type: "auth", token: session.token }));
     };
     ws.onmessage = function (ev) {
       var frame;
       try { frame = JSON.parse(ev.data); } catch (e) { return; }
-      if (frame.type === "hello") {
-        addSystem("服务端握手成功：" + (frame.msg || ""));
-      } else if (frame.type === "broadcast") {
-        addMessage(String(frame.text), false);
+      if (frame.type === "auth_ok") {
+        setStatus("on", "已连接");
+        if (activeConv) setInputEnabled(true);
+      } else if (frame.type === "auth_fail") {
+        setStatus("err", "登录已过期");
+        setInputEnabled(false);
+      } else if (frame.type === "message") {
+        var d = frame.data || {};
+        if (activeConv && d.convId === activeConv) {
+          appendMsg(d.msg, false);
+        } else {
+          toast("收到新消息");
+          loadConvs();
+        }
       }
     };
     ws.onclose = function () {
       setStatus("err", "已断开 · 3 秒后重连");
-      input.disabled = true;
-      sendBtn.disabled = true;
+      setInputEnabled(false);
       retryTimer = setTimeout(connect, 3000);
     };
     ws.onerror = function () { /* onclose 统一处理 */ };
   }
-  function send() {
-    var text = input.value.trim();
-    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
-    addMessage(text, true);
-    ws.send(text);
-    input.value = "";
-    input.focus();
-  }
-  sendBtn.addEventListener("click", send);
-  input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-  });
 
   loadPlugins();
-  openByHash();
   connect();
 })();
 </script>
