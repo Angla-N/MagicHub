@@ -9,7 +9,14 @@
 <style>
   /* 页面专属：深紫星云背景 + 深色渐变蒙版（背景图直接使用用户素材，不改动） */
   body{background:url("assets/cover-bg.jpg") center/cover no-repeat fixed,var(--bg)}
-  .auth-page{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 32px}
+  /* 登录页窗口标题栏：桌面壳下可拖动 */
+  .login-titlebar{position:fixed;top:0;left:0;right:0;z-index:30;background:rgba(10,10,14,.5);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.05);
+    padding:0 10px 0 16px}
+  .login-titlebar .title{color:rgba(255,255,255,.6)}
+  .login-titlebar .win-controls button{width:42px;height:46px;border-radius:0}
+  .login-titlebar .win-controls button:hover{background:rgba(255,255,255,.1);color:var(--accent-soft)}
+  .auth-page{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:86px 32px 40px}
   .auth-page::before{content:"";position:fixed;inset:0;z-index:0;
     background:linear-gradient(100deg,rgba(10,10,10,.92) 0%,rgba(14,14,14,.72) 45%,rgba(16,12,30,.62) 72%,rgba(20,16,38,.82) 100%)}
   /* 左右分栏：左侧品牌区 + 右侧登录卡片，填满画面避免大面积留白 */
@@ -83,6 +90,7 @@
   /* 窄屏：隐藏品牌区，仅居中登录卡片 */
   @media (max-width:900px){
     .auth-page{padding:24px 16px}
+    .login-titlebar{display:none}
     .auth-brand{display:none}
     .auth-card-col{flex-basis:100%;max-width:420px}
   }
@@ -90,6 +98,16 @@
 </head>
 <body>
 <div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<!-- 窗口标题栏：桌面壳下可拖动窗口 + 最小化/最大化/关闭 -->
+<header class="titlebar login-titlebar">
+  <span class="title">MagicHub · 登录</span>
+  <div class="win-controls" aria-label="窗口控制">
+    <button id="winMin" title="最小化"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+    <button id="winMax" title="最大化/还原"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+    <button class="close" id="winClose" title="关闭"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</header>
 
 <div class="auth-page">
   <div class="auth-layout">
@@ -184,6 +202,15 @@
 <script>
 (function () {
   "use strict";
+  /* 窗口控制：Electron 桌面壳下生效；浏览器中隐藏标题栏 */
+  var winBar = document.querySelector(".login-titlebar");
+  if (window.magicHub && window.magicHub.minimize) {
+    document.getElementById("winMin").addEventListener("click", function () { window.magicHub.minimize(); });
+    document.getElementById("winMax").addEventListener("click", function () { window.magicHub.maximize(); });
+    document.getElementById("winClose").addEventListener("click", function () { window.magicHub.close(); });
+  } else if (winBar) {
+    winBar.hidden = true;
+  }
   var mode = "login"; // login | register
   var injected = (window.magicHub && window.magicHub.serverBase) || "";
   var serverEl = document.getElementById("server");

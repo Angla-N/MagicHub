@@ -25,7 +25,7 @@ import { extname, join, normalize, sep } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
-import { ensureStore, register, login, getUser, AVATARS_DIR } from "./lib/user-store.js";
+import { ensureStore, register, login, getUser, changePassword, AVATARS_DIR } from "./lib/user-store.js";
 import {
   listUsers, listFriends, addFriend, listConversations, getMessages, addMessage, peerOf, markRead, DATA_DIR,
 } from "./lib/chat-store.js";
@@ -312,6 +312,29 @@ const httpServer = createServer(async (req, res) => {
           });
         }
       }
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ---- 账号：修改密码（POST，需登录）----
+    if (urlPath === "/api/account/password" && method === "POST") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      let payload = {};
+      try {
+        const b = await readBody(req);
+        if (!b.ok) {
+          return sendJson(res, 413, { ok: false, error: { code: "BODY_TOO_LARGE", message: "请求体过大" } });
+        }
+        payload = JSON.parse(b.raw || "{}");
+      } catch {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
+      }
+      if (typeof payload.oldPassword !== "string" || typeof payload.newPassword !== "string") {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "缺少原密码或新密码" } });
+      }
+      const result = changePassword(username, payload.oldPassword, payload.newPassword);
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 

@@ -34,6 +34,40 @@
   .ph-view{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;min-width:0;flex:1}
   .ph-view svg{opacity:.6}
 
+  /* —— 设置视图：账号信息 + 已启用插件 —— */
+  .settings-view{display:none;flex-direction:column;min-width:0;background:var(--bg-soft);flex:1}
+  .settings-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none}
+  .settings-body{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+  .set-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .set-card-title{font-size:13px;font-weight:800;color:var(--accent-soft);margin:0 0 12px;letter-spacing:.5px}
+  .set-row{display:flex;align-items:center;gap:14px;padding:9px 0;font-size:13px;border-bottom:1px dashed var(--border)}
+  .set-row:last-child{border-bottom:none}
+  .set-label{flex:none;width:76px;color:var(--text-3)}
+  .set-val{flex:1;color:var(--text-1);word-break:break-all}
+  .set-val.mono{font-family:Consolas,Menlo,monospace;font-size:12px}
+  .set-btn{flex:none;padding:6px 14px;border-radius:9px;background:rgba(124,58,237,.16);border:1px solid rgba(124,58,237,.45);
+    color:var(--accent-soft);font-size:12px;cursor:pointer;transition:background .2s}
+  .set-btn:hover{background:rgba(124,58,237,.3)}
+  .set-plugins{display:flex;flex-direction:column;gap:10px}
+  .set-plugin{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg-soft);
+    border:1px solid var(--border);border-radius:12px}
+  .set-plugin img{width:26px;height:26px;border-radius:7px;flex:none}
+  .set-plugin-letter{width:26px;height:26px;border-radius:7px;background:var(--grad);color:#fff;font-weight:800;
+    font-size:13px;display:grid;place-items:center;flex:none}
+  .set-plugin-meta{flex:1;min-width:0}
+  .set-plugin-meta b{display:block;font-size:13px;color:var(--text-1)}
+  .set-plugin-meta span{display:block;font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .set-plugin-on{flex:none;font-size:11px;color:#6ee7b7;background:rgba(52,211,153,.12);
+    border:1px solid rgba(52,211,153,.3);border-radius:999px;padding:3px 10px}
+  .set-empty{font-size:12px;color:var(--text-3);padding:8px 0}
+  .pwd-field{margin-bottom:12px;width:100%}
+  .pwd-field label{display:block;font-size:11px;color:var(--text-3);margin-bottom:6px}
+  .pwd-field .input{width:100%;padding:9px 12px;border-radius:9px;border:1px solid var(--border);
+    background:var(--bg-soft);color:var(--text-1);font-size:13px;box-sizing:border-box}
+  .pwd-field .input:focus{outline:none;border-color:rgba(167,139,250,.55);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
+  .pwd-err{width:100%;min-height:18px;font-size:12px;color:#fb7185;margin-bottom:6px}
+
   /* —— 通讯录视图（所有用户，只能查看与加好友，不能发消息） —— */
   .contacts-view{display:none;flex-direction:column;min-width:0;background:var(--bg-soft);flex:1}
   .contacts-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none}
@@ -102,7 +136,7 @@
 
     <!-- 聊天视图 -->
     <div class="chat-view" id="chatView" style="display:flex;flex-direction:column;min-width:0;min-height:0;flex:1">
-      <div class="chat-head">
+      <div class="chat-head" id="chatHead" style="display:none">
         <button class="peer-btn" id="peerBtn" title="查看好友资料">
           <span class="p-av" id="peerAv"></span>
           <span class="dot"></span>
@@ -125,7 +159,7 @@
           <span id="emptyText">还没有好友会话<br>去「通讯录」添加好友后即可聊天</span>
         </div>
       </div>
-      <div class="input-bar">
+      <div class="input-bar" id="inputBar" style="display:none">
         <div class="input-tools">
           <button class="attach-btn" id="attachBtn" title="发送图片或文件"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
           <div class="attach-pop" id="attachPop">
@@ -161,13 +195,50 @@
       <iframe class="plugin-frame" id="pluginFrame" title="插件内容" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
 
-    <!-- 占位视图（设置） -->
-    <div class="ph-view" id="phView">
-      <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>
-      <span id="phText">设置 · 功能开发中，敬请期待</span>
+    <!-- 设置视图 -->
+    <div class="settings-view" id="settingsView">
+      <div class="settings-head">设置</div>
+      <div class="settings-body">
+        <div class="set-card">
+          <h4 class="set-card-title">账号信息</h4>
+          <div class="set-row"><span class="set-label">名字</span><span class="set-val" id="setName"></span></div>
+          <div class="set-row"><span class="set-label">账号</span><span class="set-val mono" id="setUsername"></span></div>
+          <div class="set-row"><span class="set-label">密码</span><span class="set-val mono" id="setPassword">••••••••</span>
+            <button class="set-btn" id="setPwdBtn">修改密码</button></div>
+          <div class="set-row"><span class="set-label">服务器地址</span><span class="set-val mono" id="setServer"></span></div>
+        </div>
+        <div class="set-card">
+          <h4 class="set-card-title">已启用插件</h4>
+          <div class="set-plugins" id="setPlugins"></div>
+        </div>
+      </div>
     </div>
   </main>
   </div><!-- /app-main -->
+</div>
+
+<!-- 修改密码弹窗 -->
+<div class="modal-mask" id="pwdMask" hidden>
+  <div class="card-modal" style="width:320px">
+    <div class="card-name" style="margin-bottom:14px">修改密码</div>
+    <div class="pwd-field">
+      <label for="pwdOld">原密码</label>
+      <input class="input" id="pwdOld" type="password" autocomplete="current-password" placeholder="输入原密码" maxlength="64">
+    </div>
+    <div class="pwd-field">
+      <label for="pwdNew">新密码</label>
+      <input class="input" id="pwdNew" type="password" autocomplete="new-password" placeholder="至少 6 位" maxlength="64">
+    </div>
+    <div class="pwd-field">
+      <label for="pwdNew2">确认新密码</label>
+      <input class="input" id="pwdNew2" type="password" autocomplete="new-password" placeholder="再次输入新密码" maxlength="64">
+    </div>
+    <div class="pwd-err" id="pwdErr"></div>
+    <div class="card-actions" style="width:100%;justify-content:flex-end">
+      <button class="add-btn" id="pwdCancel" style="background:var(--surface);color:var(--text-2);border:1px solid var(--border)">取消</button>
+      <button class="add-btn" id="pwdSave" style="background:var(--grad);color:#fff">保存</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast" role="status"></div>
@@ -269,6 +340,44 @@
     location.href = "login.html";
   });
 
+  /* ===== 设置 · 修改密码 ===== */
+  var pwdMask = $("pwdMask");
+  $("setPwdBtn").addEventListener("click", function () {
+    $("pwdOld").value = ""; $("pwdNew").value = ""; $("pwdNew2").value = "";
+    $("pwdErr").textContent = "";
+    pwdMask.hidden = false;
+  });
+  $("pwdCancel").addEventListener("click", function () { pwdMask.hidden = true; });
+  pwdMask.addEventListener("click", function (e) { if (e.target === pwdMask) pwdMask.hidden = true; });
+  $("pwdSave").addEventListener("click", function () {
+    var oldP = $("pwdOld").value, newP = $("pwdNew").value, newP2 = $("pwdNew2").value;
+    var errEl = $("pwdErr");
+    if (!oldP) { errEl.textContent = "请输入原密码"; return; }
+    if (newP.length < 6) { errEl.textContent = "新密码至少 6 位"; return; }
+    if (newP !== newP2) { errEl.textContent = "两次输入的新密码不一致"; return; }
+    var saveBtn = $("pwdSave");
+    saveBtn.disabled = true;
+    fetch(BASE + "/api/account/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+      body: JSON.stringify({ oldPassword: oldP, newPassword: newP }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (d) {
+        saveBtn.disabled = false;
+        if (d.ok) {
+          pwdMask.hidden = true;
+          toast("密码修改成功");
+        } else {
+          errEl.textContent = (d.error && d.error.message) || "修改失败，请重试";
+        }
+      })
+      .catch(function () {
+        saveBtn.disabled = false;
+        errEl.textContent = "无法连接服务器，请检查服务器地址";
+      });
+  });
+
   /* ===== 窗口控制 ===== */
   var native = window.magicHub || null;
   $("winMin").addEventListener("click", function () { native ? native.minimize() : toast("最小化（演示）"); });
@@ -280,12 +389,17 @@
   var chatView = $("chatView");
   var contactsView = $("contactsView");
   var pluginView = $("pluginView");
-  var phView = $("phView");
-  var phText = $("phText");
+  var phView = $("settingsView");
   var railItems = Array.prototype.slice.call(document.querySelectorAll(".rail-item[data-view]"));
   var pluginEntries = {};
 
   function setListPane(show) { document.body.classList.toggle("chat-mode", !!show); }
+
+  /* 未选会话时聊天界面全空：头像栏与输入栏都不显示，选中后才出现 */
+  function setChatChrome(show) {
+    $("chatHead").style.display = show ? "flex" : "none";
+    $("inputBar").style.display = show ? "flex" : "none";
+  }
 
   function hideAllViews() {
     chatView.style.display = "none";
@@ -298,6 +412,7 @@
     chatView.style.display = "flex";
     viewTitle.textContent = "会话";
     setListPane(true);
+    setChatChrome(!!activeConv);
     loadConvs();
     // 切回聊天视图时重新拉取当前会话消息（与后端保持一致）
     if (activeConv) openConv(activeConv);
@@ -312,9 +427,30 @@
   function showSettings() {
     hideAllViews();
     phView.style.display = "flex";
-    phText.textContent = "设置 · 功能开发中，敬请期待";
     viewTitle.textContent = "设置";
     setListPane(false);
+    // 填充账号信息与服务器地址
+    $("setName").textContent = session.displayName || session.username;
+    $("setUsername").textContent = session.username;
+    $("setServer").textContent = BASE;
+    // 已启用插件列表
+    var box = $("setPlugins");
+    var keys = Object.keys(pluginEntries);
+    if (!keys.length) {
+      box.innerHTML = '<div class="set-empty">暂无插件，可在右侧导航栏插件区查看</div>';
+      return;
+    }
+    box.innerHTML = "";
+    keys.forEach(function (id) {
+      var p = pluginEntries[id];
+      var row = document.createElement("div");
+      row.className = "set-plugin";
+      var icon = pluginIconUrl(p);
+      row.innerHTML = (icon ? '<img src="' + icon + '" alt="">' : '<span class="set-plugin-letter">' + p.name.charAt(0) + '</span>') +
+        '<div class="set-plugin-meta"><b>' + p.name + '</b><span>' + (p.description || "MagicHub 插件") + '</span></div>' +
+        '<span class="set-plugin-on">已启用</span>';
+      box.appendChild(row);
+    });
   }
   function showPlugin(id, meta) {
     hideAllViews();
@@ -530,6 +666,7 @@
   /* ===== 打开会话：标记已读 + 加载历史 + 可发送 ===== */
   function openConv(convId) {
     activeConv = convId;
+    setChatChrome(true);
     Array.prototype.forEach.call(chatList.children, function (el) {
       el.classList.toggle("on", el.getAttribute("data-conv") === convId);
     });

@@ -129,6 +129,7 @@
 .modal-mask[hidden]{display:none}
 .card-modal{width:280px;background:var(--surface-2);border:1px solid var(--border);border-radius:18px;padding:26px 22px;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 24px 70px rgba(0,0,0,.55);animation:pop .22s ease both}
 .card-avatar{width:88px;height:88px;border-radius:22px;background:var(--grad);display:grid;place-items:center;color:#fff;font-size:32px;font-weight:800;overflow:hidden;flex:none;position:relative;box-shadow:0 10px 30px rgba(124,58,237,.4)}
+.card-avatar .avatar{width:100%;height:100%;border-radius:22px;font-size:32px;background:var(--grad)}
 .card-avatar img{width:100%;height:100%;object-fit:cover;position:relative;z-index:1}
 .card-avatar .av-fallback{position:absolute;inset:0;display:grid;place-items:center}
 .card-name{font-size:16px;font-weight:800;color:var(--text);margin-top:2px}

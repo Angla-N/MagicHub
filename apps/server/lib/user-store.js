@@ -144,3 +144,34 @@ export function login(username, password) {
     data: { username, displayName: record.displayName || username, avatar: record.avatar || null },
   };
 }
+
+/** 修改密码：校验旧密码后替换为新密码的哈希（新盐），成功返回新头像/名字信息 */
+export function changePassword(username, oldPassword, newPassword) {
+  if (typeof username !== "string" || typeof oldPassword !== "string" || typeof newPassword !== "string") {
+    return { ok: false, error: { code: "INVALID_INPUT", message: "参数错误" } };
+  }
+  if (newPassword.length < 6 || newPassword.length > 64) {
+    return { ok: false, error: { code: "WEAK_PASSWORD", message: "新密码至少 6 位，最长 64 位" } };
+  }
+
+  const users = loadUsers();
+  const record = users[username];
+  if (!record) {
+    return { ok: false, error: { code: "INVALID_CREDENTIALS", message: "账号或密码错误" } };
+  }
+  const expected = Buffer.from(record.hash, "hex");
+  const actual = Buffer.from(hashPassword(oldPassword, record.salt), "hex");
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    return { ok: false, error: { code: "INVALID_CREDENTIALS", message: "原密码错误" } };
+  }
+
+  const salt = randomBytes(16).toString("hex");
+  record.salt = salt;
+  record.hash = hashPassword(newPassword, salt);
+  saveUsers(users);
+  console.log(`[users] 密码已修改: ${username}`);
+  return {
+    ok: true,
+    data: { username, displayName: record.displayName || username, avatar: record.avatar || null },
+  };
+}
