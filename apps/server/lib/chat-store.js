@@ -15,7 +15,7 @@
  *  - listConversations 只读 meta.json，不再触发任何写盘副作用
  *  - 自动迁移旧版 data/chat.json（一次性拆分为分片，原文件改名保留）
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadJsonOrThrow, saveJson, atomicWrite } from "./json-file.js";
@@ -190,8 +190,8 @@ export function addFriend(me, other) {
   return { ok: true, data: { username: other } };
 }
 
-/** 删除好友：双向移除关系（不是好友则幂等成功） */
-export function removeFriend(me, other) {
+/** 删除好友：双向移除关系（不是好友则幂等成功）；clearChat=true 时同时删除双方会话全部记录 */
+export function removeFriend(me, other, clearChat) {
   const users = loadUsers();
   if (!users[me]) return { ok: false, error: { code: "NOT_FOUND", message: "账号不存在" } };
   if (me === other) return { ok: false, error: { code: "INVALID", message: "不能删除自己" } };
@@ -201,7 +201,16 @@ export function removeFriend(me, other) {
     users[other].friends = (users[other].friends || []).filter((n) => n !== me);
   }
   saveUsers(users);
-  console.log(`[chat] 好友解除: ${me} -x- ${other}`);
+  // 可选：同时清空双方会话聊天记录（服务器侧删除，本地缓存在客户端）
+  if (clearChat) {
+    const dir = convDir(convId(me, other));
+    if (existsSync(dir)) {
+      try { rmSync(dir, { recursive: true, force: true }); } catch (err) {
+        console.error(`[chat] 清空会话记录失败 ${dir}: ${err.message}`);
+      }
+    }
+  }
+  console.log(`[chat] 好友解除: ${me} -x- ${other}${clearChat ? "（并清空记录）" : ""}`);
   return { ok: true, data: { username: other } };
 }
 
@@ -237,11 +246,14 @@ function convMembersOf(convIdValue) {
 export function getMessages(convIdValue, me) {
   const members = convMembersOf(convIdValue);
   if (!members || !members.includes(me)) return null;
-  if (!existsSync(metaFile(convIdValue))) return []; // 从未聊过 → 空
-  return getAllMessages(convIdValue);
+  if (!existsSync(metaFile(convIdValue))) return { messages: [], peerLastRead: 0, peer: members.find((m) => m !== me) };
+  const meta = readMeta(convIdValue) || {};
+  const peer = members.find((m) => m !== me);
+  const peerLastRead = (meta.lastReadAt && meta.lastReadAt[peer]) || 0;
+  return { messages: getAllMessages(convIdValue), peerLastRead, peer };
 }
 
-/** 发消息：追加到最后一片（满 500 开新片），只写最后一帧 + meta；WS 推送由 server 完成 */
+/** 发消息：消息带唯一 id（供撤回/已读/客户端缓存去重），追加到最后一片（满 500 开新片） */
 export function addMessage(convIdValue, from, text, file) {
   const hasText = typeof text === "string" && text.trim().length > 0;
   const hasFile = !!file && typeof file === "object";
@@ -253,7 +265,7 @@ export function addMessage(convIdValue, from, text, file) {
     return { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问（请先添加好友）" } };
   }
 
-  const msg = { from, ts: Date.now() };
+  const msg = { id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8), from, ts: Date.now() };
   if (hasText) msg.text = text.trim().slice(0, 2000);
   if (hasFile) msg.file = {
     url: file.url,
@@ -299,7 +311,7 @@ export function addMessage(convIdValue, from, text, file) {
   return { ok: true, data: { convId: convIdValue, msg, peerUnread: peer ? meta.unread[peer] : 0 } };
 }
 
-/** 已读：把我在该会话的未读计数清零 */
+/** 已读：把我在该会话的未读计数清零，并记录本次已读时间（已读回执用） */
 export function markRead(convIdValue, me) {
   const members = convMembersOf(convIdValue);
   if (!members || !members.includes(me)) {
@@ -309,8 +321,72 @@ export function markRead(convIdValue, me) {
   if (!meta) return { ok: true, data: { convId: convIdValue } }; // 无会话记录，幂等成功
   meta.unread = meta.unread || {};
   meta.unread[me] = 0;
+  meta.lastReadAt = meta.lastReadAt || {};
+  meta.lastReadAt[me] = Date.now();
   writeMeta(convIdValue, meta);
   return { ok: true, data: { convId: convIdValue } };
+}
+
+/** 撤回消息：标记 deleted 保留占位（界面显示"已撤回"）；仅发送者可撤回 */
+export function recallMessage(convIdValue, me, msgId) {
+  const members = convMembersOf(convIdValue);
+  if (!members || !members.includes(me)) {
+    return { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问" } };
+  }
+  const dir = convDir(convIdValue);
+  if (!existsSync(dir)) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "消息不存在" } };
+  }
+  let found = null;
+  for (const f of listSlices(convIdValue)) { // 降序：新消息优先
+    const r = readSlice(f);
+    if (r.corrupt || !r.msgs.length) continue;
+    const i = r.msgs.findIndex((m) => String(m.id || "") === String(msgId || ""));
+    if (i < 0) continue;
+    if (r.msgs[i].deleted) {
+      return { ok: false, error: { code: "NOT_FOUND", message: "消息不存在或已被撤回" } };
+    }
+    if (r.msgs[i].from !== me) {
+      return { ok: false, error: { code: "FORBIDDEN", message: "只能撤回自己发送的消息" } };
+    }
+    r.msgs[i].deleted = true;
+    r.msgs[i].recalledAt = Date.now();
+    atomicWrite(f, JSON.stringify(r.msgs) + "\n");
+    found = r.msgs[i];
+    break;
+  }
+  if (!found) return { ok: false, error: { code: "NOT_FOUND", message: "消息不存在或已被撤回" } };
+  // 若撤回的是最后一条，同步 meta.lastMsg
+  const meta = readMeta(convIdValue);
+  if (meta && meta.lastMsg && meta.lastMsg.id === found.id) {
+    meta.lastMsg = found;
+    writeMeta(convIdValue, meta);
+  }
+  return { ok: true, data: { convId: convIdValue, msg: found } };
+}
+
+/** 全局消息搜索：跨我的全部会话（含历史分片），按关键词模糊匹配，返回 [{convId, peer, msgs}] */
+export function searchMessages(me, q, limit = 50) {
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return [];
+  const out = [];
+  for (const f of listFriends(me)) {
+    const id = convId(me, f.username);
+    if (!existsSync(metaFile(id))) continue;
+    const hits = [];
+    for (const sliceFile of listSlices(id).reverse()) { // 升序：旧→新
+      const { msgs, corrupt } = readSlice(sliceFile);
+      if (corrupt) continue;
+      for (const m of msgs) {
+        if (m.text && m.text.toLowerCase().includes(needle)) hits.push(m);
+      }
+    }
+    if (hits.length) {
+      out.push({ convId: id, peer: f, msgs: hits.slice(-10) });
+    }
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 /** 会话另一方（用于 WS 定向推送） */

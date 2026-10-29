@@ -39,6 +39,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { ensureStore, register, login, getUser, getUserRecord, changePassword, AVATARS_DIR } from "./lib/user-store.js";
 import {
   listUsers, listFriends, addFriend, removeFriend, listConversations, getMessages, addMessage, peerOf, markRead,
+  recallMessage, searchMessages,
   ensureChatStore, DATA_DIR,
 } from "./lib/chat-store.js";
 
@@ -703,6 +704,102 @@ function decodeBase64Payload(s) {
   return Buffer.from(m ? m[1] : (s || ""), "base64");
 }
 
+/* ---------- 分片上传（P1：大文件 2MB/片，断点续传，上限 500MB） ---------- */
+
+const UPLOAD_SESSIONS = new Map(); // uploadId -> { name,size,type,chunkSize,received:Set,tmpDir,createdAt }
+const UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024;   // 2MB / 片
+const UPLOAD_MAX_BYTES = 500 * 1024 * 1024;  // 500MB 上限
+const UPLOAD_TMP_ROOT = join(DATA_DIR, "uploads", ".tmp");
+
+function uploadTmpDir(id) { return join(UPLOAD_TMP_ROOT, id); }
+
+function newUploadSession(name, size, type) {
+  const uploadId = randomBytes(8).toString("hex");
+  const tmpDir = uploadTmpDir(uploadId);
+  mkdirSync(tmpDir, { recursive: true });
+  const chunks = Math.ceil(size / UPLOAD_CHUNK_SIZE) || 1;
+  UPLOAD_SESSIONS.set(uploadId, {
+    name: basename(String(name || "file")).slice(0, 120),
+    size: Number(size) || 0,
+    type: String(type || "application/octet-stream").slice(0, 80),
+    chunkSize: UPLOAD_CHUNK_SIZE,
+    chunks,
+    received: new Set(),
+    tmpDir,
+    createdAt: Date.now(),
+  });
+  return uploadId;
+}
+
+/** 清理过期上传会话（30 分钟未完成） */
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, s] of UPLOAD_SESSIONS) {
+    if (now - s.createdAt > 30 * 60 * 1000) {
+      try { rmSync(s.tmpDir, { recursive: true, force: true }); } catch { /* 忽略 */ }
+      UPLOAD_SESSIONS.delete(id);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
+/** 分片上传完成后合并文件：校验白名单/魔数 → 保存 → 返回静态路径 */
+function mergeUpload(uploadId) {
+  const s = UPLOAD_SESSIONS.get(uploadId);
+  if (!s) return { ok: false, error: "上传会话不存在或已过期，请重新发送" };
+  if (s.received.size !== s.chunks) {
+    return { ok: false, error: `分片不完整（${s.received.size}/${s.chunks}），请重试` };
+  }
+  if (s.size > UPLOAD_MAX_BYTES) return { ok: false, error: "文件不能超过 500MB" };
+  const parts = [];
+  for (let i = 0; i < s.chunks; i++) {
+    const p = join(s.tmpDir, String(i).padStart(6, "0") + ".part");
+    if (!existsSync(p)) return { ok: false, error: "分片缺失，请重试" };
+    parts.push(readFileSync(p));
+  }
+  const buf = Buffer.concat(parts);
+  try { rmSync(s.tmpDir, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  UPLOAD_SESSIONS.delete(uploadId);
+  // 复用扩展名白名单 + 魔数校验
+  const v = validateUpload(buf, s.name);
+  if (!v.ok) return { ok: false, error: v.error };
+  if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
+  const rawExt = extname(s.name).toLowerCase();
+  const safeExt = /^[.\w-]{1,12}$/.test(rawExt) ? rawExt : ".bin";
+  const name = Date.now() + "-" + randomBytes(4).toString("hex") + safeExt;
+  const file = join(UPLOADS_DIR, name);
+  const tmp = file + ".tmp-" + process.pid + "-" + Date.now();
+  writeFileSync(tmp, buf);
+  try { renameSync(tmp, file); } catch { rmSync(tmp, { force: true }); throw new Error("写入失败"); }
+  return { ok: true, url: "/uploads/" + name, name: s.name, size: buf.length, type: s.type };
+}
+
+/** 服务器存储统计（data + 插件市场目录大小，供设置页"存储占用"展示） */
+function dirSizeOf(root) {
+  let bytes = 0;
+  if (!existsSync(root)) return 0;
+  const stack = [root];
+  while (stack.length) {
+    const d = stack.pop();
+    let entries;
+    try { entries = readdirSync(d, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const p = join(d, e.name);
+      try {
+        if (e.isDirectory()) stack.push(p);
+        else bytes += statSync(p).size;
+      } catch { /* 忽略 */ }
+    }
+  }
+  return bytes;
+}
+
+function fmtBytes(n) {
+  if (n >= 1024 * 1024 * 1024) return (n / 1024 / 1024 / 1024).toFixed(2) + " GB";
+  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + " MB";
+  if (n >= 1024) return (n / 1024).toFixed(1) + " KB";
+  return n + " B";
+}
+
 async function serveStatic(res, file) {
   if (!file || !existsSync(file)) {
     sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "资源不存在" } });
@@ -827,7 +924,7 @@ const httpServer = createServer(async (req, res) => {
       if (urlPath === "/api/friends/add") {
         result = addFriend(username, payload.username);
       } else if (urlPath === "/api/friends/remove") {
-        result = removeFriend(username, payload.username);
+        result = removeFriend(username, payload.username, !!payload.clearChat);
       } else if (urlPath === "/api/conversations/read") {
         result = markRead(payload.convId, username);
       } else {
@@ -860,6 +957,84 @@ const httpServer = createServer(async (req, res) => {
         }
       }
       return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ---- 消息撤回：POST /api/messages/recall（需登录，仅发送者）----
+    if (method === "POST" && urlPath === "/api/messages/recall") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      let payload = {};
+      try {
+        const b = await readBody(req);
+        payload = JSON.parse((b && b.raw) || "{}");
+      } catch {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
+      }
+      const result = recallMessage(payload.convId, username, payload.id);
+      if (result.ok) {
+        const frame = { type: "recall", data: { convId: payload.convId, msgId: payload.id, from: username } };
+        pushToPeer(username, frame); // 通知自己（其他设备）
+        const peer = peerOf(payload.convId, username);
+        if (peer) pushToPeer(peer, frame); // 通知对方
+      }
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ---- 分片上传（需登录）：init → chunk×N → complete ----
+    if (method === "POST" && urlPath.startsWith("/api/upload/")) {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      let payload = {};
+      try {
+        const b = await readBody(req);
+        if (!b.ok) {
+          return sendJson(res, 413, { ok: false, error: { code: "BODY_TOO_LARGE", message: "请求体过大" } });
+        }
+        payload = JSON.parse(b.raw || "{}");
+      } catch {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
+      }
+      if (urlPath === "/api/upload/init") {
+        const size = Number(payload.size) || 0;
+        if (size <= 0 || size > UPLOAD_MAX_BYTES) {
+          return sendJson(res, 400, { ok: false, error: { code: "FILE_TOO_LARGE", message: "文件大小不合法（上限 500MB）" } });
+        }
+        const uploadId = newUploadSession(payload.name, size, payload.type);
+        const s = UPLOAD_SESSIONS.get(uploadId);
+        return sendJson(res, 200, { ok: true, data: { uploadId, chunkSize: s.chunkSize, chunks: s.chunks } });
+      }
+      const s = UPLOAD_SESSIONS.get(String(payload.uploadId || ""));
+      if (!s) {
+        return sendJson(res, 400, { ok: false, error: { code: "UPLOAD_EXPIRED", message: "上传会话不存在或已过期，请重新发送" } });
+      }
+      if (urlPath === "/api/upload/chunk") {
+        const index = Number(payload.index);
+        if (!Number.isInteger(index) || index < 0 || index >= s.chunks) {
+          return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "分片序号不合法" } });
+        }
+        if (s.received.has(index)) {
+          return sendJson(res, 200, { ok: true, data: { index, duplicated: true, received: s.received.size, chunks: s.chunks } }); // 幂等重传
+        }
+        const buf = decodeBase64Payload(payload.data || "");
+        if (!buf.length || buf.length > s.chunkSize + 1024) {
+          return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "分片内容不合法" } });
+        }
+        writeFileSync(join(s.tmpDir, String(index).padStart(6, "0") + ".part"), buf);
+        s.received.add(index);
+        return sendJson(res, 200, { ok: true, data: { index, received: s.received.size, chunks: s.chunks } });
+      }
+      if (urlPath === "/api/upload/complete") {
+        const r = mergeUpload(payload.uploadId);
+        if (!r.ok) {
+          return sendJson(res, 400, { ok: false, error: { code: "FILE_REJECTED", message: r.error } });
+        }
+        return sendJson(res, 200, { ok: true, data: r });
+      }
+      return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "上传接口不存在" } });
     }
 
     // ---- 账号：修改密码（POST，需登录；改密后旧 token 全部失效）----
@@ -983,7 +1158,44 @@ const httpServer = createServer(async (req, res) => {
       if (messages === null) {
         return sendJson(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问（请先添加好友）" } });
       }
-      return sendJson(res, 200, { ok: true, data: { messages } });
+      return sendJson(res, 200, { ok: true, data: { messages: messages.messages, peerLastRead: messages.peerLastRead, peer: messages.peer } });
+    }
+
+    // ---- 全局消息搜索：GET /api/search?q=（需登录，跨我的全部会话）----
+    if (urlPath === "/api/search") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      const q = qs.get("q") || "";
+      if (!q.trim()) {
+        return sendJson(res, 200, { ok: true, data: { results: [] } });
+      }
+      return sendJson(res, 200, { ok: true, data: { results: searchMessages(username, q, 50) } });
+    }
+
+    // ---- 健康检查：GET /api/health（无需登录，供客户端验证服务器可用）----
+    if (urlPath === "/api/health") {
+      return sendJson(res, 200, { ok: true, data: { service: "magichub-server", uptime: Math.round(process.uptime()) } });
+    }
+
+    // ---- 服务器存储统计：GET /api/server/stats（需登录，设置页"存储占用"）----
+    if (urlPath === "/api/server/stats") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        data: {
+          data: fmtBytes(dirSizeOf(DATA_DIR)),
+          uploads: fmtBytes(dirSizeOf(UPLOADS_DIR)),
+          avatars: fmtBytes(dirSizeOf(join(DATA_DIR, "avatars"))),
+          chat: fmtBytes(dirSizeOf(join(DATA_DIR, "chat"))),
+          plugins: fmtBytes(dirSizeOf(PLUGINS_ROOT)),
+          total: fmtBytes(dirSizeOf(DATA_DIR) + dirSizeOf(PLUGINS_ROOT)),
+        },
+      });
     }
 
     // ---- 插件市场：列表 / 下载安装包 ----
@@ -1074,6 +1286,8 @@ wss.on("connection", (ws) => {
   console.log(`[ws] client connected (total: ${wss.clients.size})`);
 
   ws.username = null;
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
 
   ws.on("message", (data) => {
     let frame;
@@ -1109,6 +1323,26 @@ wss.on("connection", (ws) => {
 
   ws.on("error", () => { /* close 统一处理 */ });
 });
+
+// WS 心跳：每 30s ping，60s 未收到 pong 视为半开连接，强制清理（防连接数膨胀）
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.isAlive) {
+      if (ws.username) {
+        const conns = wsClients.get(ws.username);
+        if (conns) {
+          conns.delete(ws);
+          if (!conns.size) wsClients.delete(ws.username);
+        }
+      }
+      ws.terminate();
+      console.log(`[ws] 心跳超时清理半开连接（在线 ${wss.clients.size}）`);
+      continue;
+    }
+    ws.isAlive = false;
+    try { ws.ping(); } catch { ws.terminate(); }
+  }
+}, 30 * 1000).unref();
 
 httpServer.listen(PORT, () => {
   console.log(`MagicHub server listening:`);

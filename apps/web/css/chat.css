@@ -65,6 +65,14 @@
 .msg.out .bubble{background:var(--grad);color:#fff;border-top-right-radius:4px;box-shadow:0 4px 14px rgba(124,58,237,.35)}
 /* 时间戳：独立小行、微弱不居中 */
 .msg-time{font-size:10px;color:var(--text-3);opacity:.72;line-height:1.2;margin-top:1px;user-select:none}
+/* P1：#18 撤回按钮与已读回执：时间行内联，撤回 hover 可见 */
+.msg-time{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.msg.in .msg-time{justify-content:flex-start}
+.recall-btn{appearance:none;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:10px;line-height:1;padding:2px 7px;border-radius:8px;cursor:pointer;opacity:0;transition:opacity .15s,color .15s,border-color .15s}
+.msg:hover .recall-btn{opacity:.85}
+.recall-btn:hover{color:#fff;border-color:rgba(244,63,94,.65);background:rgba(244,63,94,.15);opacity:1}
+.bubble.recalled{background:var(--surface-2);border:1px dashed var(--border);color:var(--text-3);font-size:12px;font-style:italic;box-shadow:none}
+.read-receipt{font-size:10px;color:var(--text-3);opacity:.6;text-align:right;padding:0 4px 6px;user-select:none}
 
 /* 迷你气泡（组件演示用） */
 .bubble-sm{padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.5;max-width:260px}

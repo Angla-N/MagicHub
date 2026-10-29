@@ -146,6 +146,22 @@
   .c-detail .big-avatar img{width:100%;height:100%;object-fit:cover}
   .c-detail .d-name{font-size:18px;font-weight:700;color:var(--text)}
   .c-detail .d-tip{font-size:11px;color:var(--text-3)}
+  /* P1：#16 全局搜索弹窗 / #19 存储占用 */
+  .gsearch-btn{margin-left:2px;flex-shrink:0}
+  .gsearch-modal{width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;padding:18px}
+  .gsearch-input-wrap{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:0 10px;color:var(--text-3);margin-bottom:12px}
+  .gsearch-input-wrap .input{border:none;background:transparent;flex:1;padding:8px 0}
+  .gsearch-results{overflow-y:auto;min-height:80px;max-height:52vh}
+  .gsearch-group{margin-bottom:12px}
+  .gsearch-peer{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);padding:4px 2px 6px}
+  .gsearch-peer .avatar{width:26px;height:26px;border-radius:9px}
+  .gsearch-peer .gp-name{font-weight:600;color:var(--text)}
+  .gsearch-peer .gp-acc{font-style:normal;color:var(--text-3);font-size:11px}
+  .gsearch-item{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:6px;cursor:pointer;color:var(--text-2);font-size:12px;transition:border-color .15s,background .15s}
+  .gsearch-item:hover{border-color:rgba(124,58,237,.55);background:rgba(124,58,237,.08)}
+  .gsearch-item .gs-who{font-size:10px;color:var(--text-3)}
+  .gsearch-item .gs-text{color:var(--text-2);word-break:break-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .gsearch-none{color:var(--text-3);font-size:12px;text-align:center;padding:20px 0}
 </style>
 </head>
 <body>
@@ -186,7 +202,9 @@
   <aside class="list-pane">
     <div class="list-head">
       <h3>会话</h3>
-      <div class="search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input id="convSearch" placeholder="搜索会话或消息"></div>
+      <div class="search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg><input id="convSearch" placeholder="搜索会话或消息">
+        <button class="icon-btn gsearch-btn" id="globalSearchBtn" title="全局搜索消息"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/><path d="M8.5 11h5M11 8.5v5"/></svg></button>
+      </div>
     </div>
     <div class="list" id="chatList"></div>
   </aside>
@@ -276,6 +294,14 @@
           </div>
         </div>
         <div class="set-card">
+          <h4 class="set-card-title">服务器存储占用</h4>
+          <div class="set-row"><span class="set-label">总占用</span><span class="set-val mono" id="stTotal">-</span></div>
+          <div class="set-row"><span class="set-label">聊天记录</span><span class="set-val mono" id="stChat">-</span></div>
+          <div class="set-row"><span class="set-label">上传文件</span><span class="set-val mono" id="stUploads">-</span></div>
+          <div class="set-row"><span class="set-label">头像</span><span class="set-val mono" id="stAvatars">-</span></div>
+          <div class="set-row"><span class="set-label">插件</span><span class="set-val mono" id="stPlugins">-</span></div>
+        </div>
+        <div class="set-card">
           <h4 class="set-card-title">已启用插件</h4>
           <div class="set-plugins" id="setPlugins"></div>
         </div>
@@ -327,6 +353,18 @@
       <button class="add-btn" id="pwdCancel" style="background:var(--surface);color:var(--text-2);border:1px solid var(--border)">取消</button>
       <button class="add-btn" id="pwdSave" style="background:var(--grad);color:#fff">保存</button>
     </div>
+  </div>
+</div>
+
+<!-- 全局消息搜索弹窗（跨所有会话） -->
+<div class="modal-mask" id="globalSearchMask" hidden>
+  <div class="card-modal gsearch-modal">
+    <div class="card-name" style="margin-bottom:12px">全局消息搜索</div>
+    <div class="gsearch-input-wrap">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg>
+      <input class="input" id="globalSearchInput" placeholder="搜索我所有会话中的消息…" maxlength="64">
+    </div>
+    <div class="gsearch-results" id="globalSearchResults"></div>
   </div>
 </div>
 
@@ -540,6 +578,7 @@
     $("setName").textContent = session.displayName || session.username;
     $("setUsername").textContent = session.username;
     $("setServer").textContent = BASE;
+    loadServerStats();
     // 后台驻留开关（仅桌面端）
     var keepRow = $("keepRow");
     if (window.magicHub && window.magicHub.getKeepInBackground) {
@@ -565,6 +604,20 @@
         '<span class="set-plugin-on">已启用</span>';
       box.appendChild(row);
     });
+  }
+  /* P1：#19 服务器存储占用（设置页展示） */
+  function loadServerStats() {
+    api(BASE + "/api/server/stats", { headers: authHeaders() })
+      .then(function (d) {
+        if (!d.ok || !d.data) return;
+        var s = d.data;
+        $("stTotal").textContent = s.total || "-";
+        $("stChat").textContent = s.chat || "-";
+        $("stUploads").textContent = s.uploads || "-";
+        $("stAvatars").textContent = s.avatars || "-";
+        $("stPlugins").textContent = s.plugins || "-";
+      })
+      .catch(function () { /* 后端未启动 */ });
   }
   // 后台驻留开关变化时写入桌面端设置
   $("keepCheck").addEventListener("change", function () {
@@ -1069,6 +1122,60 @@
     renderConvs();
   });
 
+  /* P1：#16 全局消息搜索：跨所有会话，按会话分组展示命中消息，点击跳转 */
+  var gsMask = $("globalSearchMask");
+  var gsTimer = null;
+  $("globalSearchBtn").addEventListener("click", function () {
+    gsMask.hidden = false;
+    $("globalSearchInput").value = "";
+    $("globalSearchResults").innerHTML = "";
+    setTimeout(function () { $("globalSearchInput").focus(); }, 50);
+  });
+  gsMask.addEventListener("click", function (e) { if (e.target === gsMask) gsMask.hidden = true; });
+  $("globalSearchInput").addEventListener("input", function () {
+    clearTimeout(gsTimer);
+    var kw = this.value.trim();
+    var box = $("globalSearchResults");
+    if (!kw) { box.innerHTML = ""; return; }
+    gsTimer = setTimeout(function () {
+      api(BASE + "/api/search?q=" + encodeURIComponent(kw), { headers: authHeaders() })
+        .then(function (d) {
+          if (!d.ok) return;
+          var results = d.data.results || [];
+          box.innerHTML = "";
+          if (!results.length) {
+            box.innerHTML = '<div class="gsearch-none">没有找到相关消息</div>';
+            return;
+          }
+          results.forEach(function (r) {
+            var peer = r.peer || {};
+            var group = document.createElement("div");
+            group.className = "gsearch-group";
+            var head = document.createElement("div");
+            head.className = "gsearch-peer";
+            head.innerHTML = avatarHTML(peer) + '<span class="gp-name">' + (peer.displayName || peer.username) + '</span><i class="gp-acc">账号 ' + peer.username + '</i>';
+            group.appendChild(head);
+            r.msgs.forEach(function (m) {
+              var item = document.createElement("button");
+              item.type = "button";
+              item.className = "gsearch-item";
+              var who = m.from === session.username ? "我" : (peer.displayName || peer.username);
+              var body = m.deleted ? "[已撤回]" : (m.text || previewText(m));
+              item.innerHTML = '<span class="gs-who">' + who + ' · ' + fmtTime(m.ts) + '</span><span class="gs-text">' + escapeHtml(String(body).slice(0, 64)) + '</span>';
+              item.addEventListener("click", function () {
+                showChat();
+                openConv(r.convId);
+                gsMask.hidden = true;
+              });
+              group.appendChild(item);
+            });
+            box.appendChild(group);
+          });
+        })
+        .catch(function () { /* 后端未启动 */ });
+    }, 300);
+  });
+
   /* ===== 关闭会话（清空聊天区，隐藏输入栏） ===== */
   function closeConv() {
     activeConv = null;
@@ -1130,6 +1237,19 @@
           return;
         }
         msgs.forEach(function (m) { appendMsg(m, m.from === session.username); });
+        // P1：#18 已读回执：对方最近一次已读时间 >= 最后一条消息时间 → 显示"已读"
+        var peerLastRead = data.data.peerLastRead || 0;
+        var myLast = null;
+        for (var i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].from === session.username && !msgs[i].deleted) { myLast = msgs[i]; break; }
+        }
+        if (myLast && peerLastRead >= myLast.ts && msgs[msgs.length - 1] && msgs[msgs.length - 1].from === session.username) {
+          var rt = document.createElement("div");
+          rt.className = "read-receipt";
+          rt.textContent = "已读";
+          rt.title = "对方于 " + fmtTime(peerLastRead) + " 已读";
+          area.appendChild(rt);
+        }
         area.scrollTop = area.scrollHeight;
       })
       .catch(function () { if (!cached.length) empty.style.display = ""; });
@@ -1155,8 +1275,13 @@
     $("emptyTip").style.display = "none";
     var div = document.createElement("div");
     div.className = "msg " + (mine ? "out" : "in");
+    if (m.id) div.setAttribute("data-msgid", String(m.id));
     var bubble = document.createElement("div");
-    if (m.file && /^image\//.test(m.file.type)) {
+    if (m.deleted) {
+      // P1：#18 已撤回占位（服务端保留记录，双方统一显示）
+      bubble.className = "bubble recalled";
+      bubble.textContent = mine ? "你撤回了一条消息" : "对方撤回了一条消息";
+    } else if (m.file && /^image\//.test(m.file.type)) {
       bubble.className = "bubble has-img";
       var img = document.createElement("img");
       img.className = "msg-img";
@@ -1182,10 +1307,56 @@
     time.className = "msg-time";
     time.textContent = fmtTime(m.ts);
     div.appendChild(time);
+    // P1：#18 撤回按钮：仅自己发送且未撤回的消息显示（hover 可见）
+    if (mine && !m.deleted && m.id) {
+      var rec = document.createElement("button");
+      rec.type = "button";
+      rec.className = "recall-btn";
+      rec.textContent = "撤回";
+      rec.title = "撤回这条消息";
+      rec.addEventListener("click", function () { recallMsg(m.id); });
+      time.appendChild(rec);
+    }
     area.appendChild(div);
     area.scrollTop = area.scrollHeight;
     // 消息搜索激活时对新消息同步过滤
     if (msgSearchInput && msgSearchInput.value.trim()) applyMsgSearch();
+  }
+
+  /* P1：#18 撤回自己发送的消息 */
+  function recallMsg(msgId) {
+    if (!activeConv) return;
+    api(BASE + "/api/messages/recall", {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify({ convId: activeConv, id: msgId }),
+    }).then(function (d) {
+      if (d.ok) {
+        toast("已撤回");
+        recallLocal(activeConv, msgId);
+        loadConvs();
+      } else {
+        toast((d.error && d.error.message) || "撤回失败");
+      }
+    }).catch(function () { toast("撤回失败，请检查后端服务"); });
+  }
+
+  /* 本地把消息标记为"已撤回"：同步当前气泡 + 更新缓存（其他端撤回推送时也调用） */
+  function recallLocal(convId, msgId) {
+    var cache = readMsgCache(convId);
+    var changed = false;
+    cache.forEach(function (m) {
+      if (String(m.id || "") === String(msgId || "")) { m.deleted = true; changed = true; }
+    });
+    if (changed) writeMsgCache(convId, cache);
+    Array.prototype.forEach.call($("msgArea").querySelectorAll('.msg[data-msgid="' + String(msgId) + '"]'), function (el) {
+      var bubble = el.querySelector(".bubble");
+      if (!bubble || bubble.classList.contains("recalled")) return;
+      bubble.className = "bubble recalled";
+      bubble.textContent = el.classList.contains("out") ? "你撤回了一条消息" : "对方撤回了一条消息";
+      var rec = el.querySelector(".recall-btn");
+      if (rec) rec.remove();
+    });
   }
 
   /* ===== 发送消息（含失败重试） ===== */
@@ -1288,9 +1459,70 @@
     });
   }
 
+  /* P1：#15 文件分片上传（>2MB 走 init→chunk×N→complete；小文件沿用原 base64 路径兼容） */
   function sendFileMsg(file) {
     if (!canSendFile()) return;
-    if (file.size > 8 * 1024 * 1024) { toast("文件不能超过 8MB"); return; }
+    if (file.size > 500 * 1024 * 1024) { toast("文件不能超过 500MB"); return; }
+    if (file.size <= 2 * 1024 * 1024) return sendSmallFile(file);
+    toast("正在上传…（分片）");
+    api(BASE + "/api/upload/init", {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify({ name: file.name, size: file.size, type: file.type || "application/octet-stream" }),
+    }).then(function (d) {
+      if (!d.ok) { toast((d.error && d.error.message) || "上传初始化失败"); return; }
+      var uploadId = d.data.uploadId, chunkSize = d.data.chunkSize, chunks = d.data.chunks;
+      var offset = 0, idx = 0;
+      var done = 0;
+      function next() {
+        if (idx >= chunks) return complete();
+        var blob = file.slice(offset, offset + chunkSize);
+        offset += chunkSize;
+        var reader = new FileReader();
+        reader.onload = function () {
+          var b64 = reader.result.split(",")[1];
+          api(BASE + "/api/upload/chunk", {
+            method: "POST",
+            headers: authHeaders(true),
+            body: JSON.stringify({ uploadId: uploadId, index: idx, data: b64 }),
+          }).then(function (r) {
+            idx++;
+            if (r.ok) {
+              done++;
+              if (done % 5 === 0) toast("上传中… " + Math.round(done * 100 / chunks) + "%");
+              next();
+            } else {
+              toast((r.error && r.error.message) || "分片上传失败");
+            }
+          }).catch(function () { toast("分片上传失败，请检查网络"); });
+        };
+        reader.readAsDataURL(blob);
+      }
+      function complete() {
+        api(BASE + "/api/upload/complete", {
+          method: "POST",
+          headers: authHeaders(true),
+          body: JSON.stringify({ uploadId: uploadId }),
+        }).then(function (r) {
+          if (!r.ok) { toast((r.error && r.error.message) || "上传失败"); return; }
+          var meta = r.data;
+          postMessage({
+            convId: activeConv,
+            text: "",
+            file: { url: meta.url, name: meta.name, type: meta.type, size: meta.size },
+          }, function (m) {
+            appendMsg(m, true);
+            loadConvs();
+          }).then(function (ok) {
+            if (!ok) showFailMsg(null, { name: file.name, type: file.type, size: file.size, data: "" });
+          });
+        }).catch(function () { toast("上传失败，请检查后端服务"); });
+      }
+      next();
+    }).catch(function () { toast("上传初始化失败，请检查后端服务"); });
+  }
+
+  function sendSmallFile(file) {
     var reader = new FileReader();
     reader.onload = function () {
       var b64 = reader.result.split(",")[1];
@@ -1472,16 +1704,18 @@
       .catch(function () { toast("添加失败，请检查后端服务"); });
   }
 
+  /* P1：#19 删除好友：两步确认（是否同时清空双方聊天记录） */
   function removeFriend(username) {
-    if (!confirm("确定删除好友「" + username + "」？双方的会话将保留在服务器上。")) return;
+    if (!confirm("确定删除好友「" + username + "」？删除后将无法再看到对方，需重新添加才能聊天。")) return;
+    var clearChat = confirm("是否同时清空双方的历史聊天记录？\n（选择「确定」= 同时清空服务器记录；选择「取消」= 仅解除好友，保留记录）");
     api(BASE + "/api/friends/remove", {
       method: "POST",
       headers: authHeaders(true),
-      body: JSON.stringify({ username: username }),
+      body: JSON.stringify({ username: username, clearChat: clearChat }),
     })
       .then(function (data) {
         if (data.ok) {
-          toast("已删除好友「" + username + "」");
+          toast("已删除好友「" + username + "」" + (clearChat ? "，并清空聊天记录" : ""));
           // 若当前正与该好友聊天，关闭会话
           if (activeConv && convMeta[activeConv] && convMeta[activeConv].peer.username === username) {
             closeConv();
@@ -1560,8 +1794,24 @@
             updateConvBadge(d.convId, convMeta[d.convId].unread);
           }
           toast("收到新消息");
+          // P1：#17 桌面通知（后台驻留 / 窗口未聚焦时由主进程弹出系统通知）
+          var peerName = "";
+          if (convMeta[d.convId] && convMeta[d.convId].peer) peerName = convMeta[d.convId].peer.displayName || convMeta[d.convId].peer.username;
+          var body = "";
+          if (d.msg && d.msg.file) body = "[文件] " + (d.msg.file.name || "");
+          else if (d.msg && d.msg.text) body = d.msg.text;
+          if (window.magicHub && window.magicHub.notify) {
+            window.magicHub.notify(peerName + " 发来消息", body.slice(0, 80)).catch(function () {});
+          } else {
+            document.title = "(" + (convMeta[d.convId] ? convMeta[d.convId].unread : 1) + ") MagicHub";
+          }
           loadConvs();
         }
+      } else if (frame.type === "recall") {
+        // P1：#18 对方/其他端撤回：本地气泡同步标记为"已撤回"
+        var r = frame.data || {};
+        recallLocal(r.convId, r.msgId);
+        loadConvs();
       }
     };
     ws.onclose = function () {
@@ -1571,6 +1821,9 @@
     };
     ws.onerror = function () { /* onclose 统一处理 */ };
   }
+
+  /* P1：#13 进入主界面先校验 token 是否过期（401 时 api() 统一清会话并跳登录页） */
+  api(BASE + "/api/me", { headers: authHeaders() }).catch(function () { /* api() 已处理 401；网络错误保持页面 */ });
 
   loadPlugins();
   connect();

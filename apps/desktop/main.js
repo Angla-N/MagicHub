@@ -10,7 +10,7 @@
  *
  * 业务数据（账号、聊天记录、文件下载）全部由独立的 MagicHub-Server 提供。
  */
-const { app, BrowserWindow, ipcMain, Tray, Menu, net } = require("electron");
+const { app, BrowserWindow, ipcMain, Tray, Menu, net, Notification } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFile } = require("node:child_process");
@@ -218,6 +218,18 @@ ipcMain.handle("win:maximize", () => {
   else win.maximize();
 });
 ipcMain.handle("win:close", () => win && win.close());
+
+/* 系统通知：后台驻留 / 窗口最小化时新消息桌面弹出（P1） */
+ipcMain.handle("app:notify", (_e, title, body) => {
+  if (win && win.isVisible() && win.isFocused()) return false; // 前台聚焦时不打扰
+  try {
+    if (Notification.isSupported()) {
+      new Notification({ title: String(title || "MagicHub"), body: String(body || ""), silent: false }).show();
+      return true;
+    }
+  } catch { /* 忽略 */ }
+  return false;
+});
 
 ipcMain.handle("settings:getKeepInBackground", () => keepInBackground());
 ipcMain.handle("settings:setKeepInBackground", (_e, val) => {

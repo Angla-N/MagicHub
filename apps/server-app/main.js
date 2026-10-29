@@ -9,7 +9,7 @@
  *
  * 客户端（MagicHub-Client / H5）通过服务器地址（默认 http://localhost:3000）连接本服务。
  */
-const { app, Tray, Menu, utilityProcess } = require("electron");
+const { app, Tray, Menu, utilityProcess, Notification, net } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
@@ -44,6 +44,13 @@ function seedPlugins() {
       const pack = path.join(pluginsRoot, name + ".7z");
       const metaFile = path.join(pluginsRoot, ".meta", name + ".json");
       const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+      // 用户已删除/隐藏过的内置插件：尊重 .meta 里的 deleted 标记，不再自动种回
+      if (fs.existsSync(metaFile)) {
+        try {
+          const prev = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+          if (prev.deleted === true) continue;
+        } catch { /* 元数据损坏则重新种子 */ }
+      }
       // 图标：从包内/内置源码提取到 .icons/<name><ext>，市场列表直接引用
       const iconName = m.icon || "";
       const iconBase = iconName ? path.basename(String(iconName).split("?")[0]) : "";
@@ -105,6 +112,36 @@ app.whenReady().then(() => {
       MAGICHUB_PACKAGED: app.isPackaged ? "1" : "0",
     },
   });
+
+  /* ---- 健康检查：持续探测 /api/health，连续失败时托盘与系统通知提示 ---- */
+  let healthFails = 0;
+  let healthOk = false;
+  const healthTimer = setInterval(async () => {
+    if (serverProc && serverProc.killed) {
+      healthFails++;
+    } else {
+      try {
+        const res = await net.fetch("http://127.0.0.1:" + port + "/api/health", {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (res.ok) { healthFails = 0; healthOk = true; }
+        else healthFails++;
+      } catch {
+        healthFails++;
+      }
+    }
+    if (healthFails >= 3 && healthOk) {
+      healthOk = false; // 只提示一次
+      const msg = "服务未响应（端口 " + port + " 可能被占用或启动失败），请查看日志: " + path.join(dataDir, "server.log");
+      console.error("[magichub-server] 健康检查失败:", msg);
+      try { new Notification({ title: "MagicHub-Server 服务异常", body: msg }).show(); } catch { /* 忽略 */ }
+      if (tray) tray.setToolTip("MagicHub-Server · 服务异常");
+    } else if (healthFails === 0 && !healthOk) {
+      healthOk = true;
+      if (tray) tray.setToolTip("MagicHub-Server · 运行中 · 端口 " + port);
+    }
+  }, 5000);
+  app.on("will-quit", () => clearInterval(healthTimer));
 
   // 系统托盘：查看状态 / 打开数据目录 / 退出
   const iconPath = app.isPackaged

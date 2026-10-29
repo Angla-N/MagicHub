@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("magicHub", {
   minimize: () => ipcRenderer.invoke("win:minimize"),
   maximize: () => ipcRenderer.invoke("win:maximize"),
   close: () => ipcRenderer.invoke("win:close"),
+  /* 系统通知（后台驻留时新消息桌面弹出） */
+  notify: (title, body) => ipcRenderer.invoke("app:notify", title, body),
   /* 后台驻留 */
   getKeepInBackground: () => ipcRenderer.invoke("settings:getKeepInBackground"),
   setKeepInBackground: (val) => ipcRenderer.invoke("settings:setKeepInBackground", !!val),
