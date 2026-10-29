@@ -400,6 +400,24 @@
     return h;
   }
 
+  /* 统一 API 封装：401 时清会话并跳回登录页（避免 token 过期后各接口乱报错） */
+  function api(url, opts) {
+    return fetch(url, opts).then(function (res) {
+      if (res.status === 401) {
+        localStorage.removeItem("magichub_session");
+        location.replace("login.html");
+        throw new Error("UNAUTHORIZED");
+      }
+      return res.json();
+    });
+  }
+
+  /* 上传文件签名 URL（/uploads/ 需签名，5 分钟有效）：图片/下载前先取签名 */
+  function signedUploadUrl(path) {
+    return api(BASE + "/api/uploads/sign?path=" + encodeURIComponent(path), { headers: authHeaders() })
+      .then(function (d) { return d.ok ? BASE + d.data.url : null; });
+  }
+
   /* ===== 账号头像：点击放大查看，不直接退出登录 ===== */
   var avatarBtn = $("avatarBtn");
   function renderAvatar() {
@@ -446,12 +464,11 @@
     if (newP !== newP2) { errEl.textContent = "两次输入的新密码不一致"; return; }
     var saveBtn = $("pwdSave");
     saveBtn.disabled = true;
-    fetch(BASE + "/api/account/password", {
+    api(BASE + "/api/account/password", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+      headers: authHeaders(true),
       body: JSON.stringify({ oldPassword: oldP, newPassword: newP }),
     })
-      .then(function (res) { return res.json(); })
       .then(function (d) {
         saveBtn.disabled = false;
         if (d.ok) {
@@ -651,8 +668,7 @@
     }
 
     // 服务器市场列表
-    fetch(BASE + "/api/plugins", { headers: authHeaders() })
-      .then(function (res) { return res.json(); })
+    api(BASE + "/api/plugins", { headers: authHeaders() })
       .then(function (data) {
         marketPlugins = (data.ok && data.data && data.data.plugins) || [];
         localDone = true; done();
@@ -770,6 +786,11 @@
       headers: { Authorization: "Bearer " + session.token },
     })
       .then(function (res) {
+        if (res.status === 401) {
+          localStorage.removeItem("magichub_session");
+          location.replace("login.html");
+          throw new Error("登录已过期");
+        }
         if (!res.ok) throw new Error("下载失败");
         return res.arrayBuffer();
       })
@@ -809,16 +830,15 @@
     var fr = new FileReader();
     fr.onload = function () {
       var data = fr.result; // dataURL
-      fetch(BASE + "/api/plugins/upload", {
+      api(BASE + "/api/plugins/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+        headers: authHeaders(true),
         body: JSON.stringify({ name: file.name, data: data }),
       })
-        .then(function (res) { return res.json(); })
         .then(function (d) {
           if (d.ok) {
             marketToast("插件「" + d.data.name + "」已发布到服务器（默认为私有，可在市场中设为公开）");
-            return fetch(BASE + "/api/plugins").then(function (r) { return r.json(); });
+            return api(BASE + "/api/plugins", { headers: authHeaders() });
           }
           throw new Error((d.error && d.error.message) || "上传失败");
         })
@@ -845,30 +865,28 @@
     else if (act === "uninstall") uninstallPlugin(id);
     else if (act === "delete") {
       if (!confirm("确定删除插件「" + (p.name || id) + "」？服务器与市场中的该插件都会被删除。")) return;
-      fetch(BASE + "/api/plugins/" + encodeURIComponent(id), {
+      api(BASE + "/api/plugins/" + encodeURIComponent(id), {
         method: "DELETE",
-        headers: { Authorization: "Bearer " + session.token },
+        headers: authHeaders(),
       })
-        .then(function (res) { return res.json(); })
         .then(function (d) {
           if (!d.ok) throw new Error((d.error && d.error.message) || "删除失败");
           marketToast("插件已删除");
-          return fetch(BASE + "/api/plugins").then(function (r) { return r.json(); });
+          return api(BASE + "/api/plugins", { headers: authHeaders() });
         })
         .then(function (d) { marketPlugins = (d.ok && d.data && d.data.plugins) || []; renderMarket(); })
         .catch(function (err) { marketToast("删除失败：" + (err.message || err)); });
     } else if (act === "toggle") {
       var toPublic = p.public === false;
-      fetch(BASE + "/api/plugins/" + encodeURIComponent(id) + "/visibility", {
+      api(BASE + "/api/plugins/" + encodeURIComponent(id) + "/visibility", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+        headers: authHeaders(true),
         body: JSON.stringify({ public: toPublic }),
       })
-        .then(function (res) { return res.json(); })
         .then(function (d) {
           if (!d.ok) throw new Error((d.error && d.error.message) || "设置失败");
           marketToast(toPublic ? "插件已公开，所有用户可见" : "插件已设为私有");
-          return fetch(BASE + "/api/plugins").then(function (r) { return r.json(); });
+          return api(BASE + "/api/plugins", { headers: authHeaders() });
         })
         .then(function (d) { marketPlugins = (d.ok && d.data && d.data.plugins) || []; renderMarket(); })
         .catch(function (err) { marketToast("设置失败：" + (err.message || err)); });
@@ -940,16 +958,37 @@
     return "[文件] " + m.file.name;
   }
   function fileCardHTML(f) {
-    return '<div class="file-card">' +
+    return '<div class="file-card" data-url="' + escapeHtml(f.url) + '">' +
       '<span class="file-ico"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg></span>' +
       '<span class="file-info"><span class="file-name">' + escapeHtml(f.name) + '</span>' +
       '<span class="file-size">' + fmtSize(f.size) + '</span></span>' +
-      '<a class="file-dl" href="' + BASE + f.url + '" target="_blank" rel="noopener" download="' + escapeHtml(f.name) + '">下载</a></div>';
+      '<button type="button" class="file-dl" data-dl="' + escapeHtml(f.name) + '">下载</button></div>';
   }
   function showLightbox(src) {
     $("lightboxImg").src = src;
     $("lightbox").classList.add("show");
   }
+  /* 文件消息下载：/uploads/ 需签名 URL，先取签名再触发下载 */
+  $("msgArea").addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest(".file-dl") : null;
+    if (!btn) return;
+    var card = btn.closest(".file-card");
+    if (!card) return;
+    e.preventDefault();
+    var path = card.getAttribute("data-url");
+    var name = btn.getAttribute("data-dl") || "download";
+    btn.disabled = true;
+    signedUploadUrl(path).then(function (u) {
+      btn.disabled = false;
+      if (!u) { toast("文件链接已过期，请刷新会话后重试"); return; }
+      var a = document.createElement("a");
+      a.href = u;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }).catch(function () { btn.disabled = false; });
+  });
   function escapeHtml(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
@@ -1017,8 +1056,7 @@
   }
 
   function loadConvs() {
-    fetch(BASE + "/api/conversations", { headers: authHeaders() })
-      .then(function (res) { return res.json(); })
+    api(BASE + "/api/conversations", { headers: authHeaders() })
       .then(function (data) {
         lastConvs = (data.ok && data.data && data.data.conversations) || [];
         renderConvs();
@@ -1073,8 +1111,7 @@
     cached.forEach(function (m) { appendMsg(m, m.from === session.username); });
     if (cached.length) area.scrollTop = area.scrollHeight;
 
-    fetch(BASE + "/api/messages?conv=" + encodeURIComponent(convId), { headers: authHeaders() })
-      .then(function (res) { return res.json(); })
+    api(BASE + "/api/messages?conv=" + encodeURIComponent(convId), { headers: authHeaders() })
       .then(function (data) {
         if (!data.ok) {
           if (!cached.length) {
@@ -1123,9 +1160,13 @@
       bubble.className = "bubble has-img";
       var img = document.createElement("img");
       img.className = "msg-img";
-      img.src = BASE + m.file.url;
       img.alt = m.file.name;
       img.loading = "lazy";
+      // /uploads/ 需签名 URL（5 分钟有效）：先取签名再加载，失败显示占位
+      signedUploadUrl(m.file.url).then(function (u) {
+        if (!u) { img.classList.add("img-broken"); return; }
+        img.src = u;
+      });
       img.addEventListener("load", function () { area.scrollTop = area.scrollHeight; });
       img.addEventListener("click", function () { showLightbox(this.src); });
       bubble.appendChild(img);
@@ -1149,12 +1190,11 @@
 
   /* ===== 发送消息（含失败重试） ===== */
   function postMessage(body, onOk) {
-    return fetch(BASE + "/api/messages", {
+    return api(BASE + "/api/messages", {
       method: "POST",
       headers: authHeaders(true),
       body: JSON.stringify(body),
     })
-      .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data.ok) { onOk(data.data); return true; }
         toast((data.error && data.error.message) || "发送失败");
@@ -1371,8 +1411,7 @@
   }
 
   function loadUsers() {
-    fetch(BASE + "/api/users", { headers: authHeaders() })
-      .then(function (res) { return res.json(); })
+    api(BASE + "/api/users", { headers: authHeaders() })
       .then(function (data) {
         var users = (data.ok && data.data && data.data.users) || [];
         userListEl.innerHTML = "";
@@ -1416,12 +1455,11 @@
   }
 
   function addFriend(username) {
-    fetch(BASE + "/api/friends/add", {
+    api(BASE + "/api/friends/add", {
       method: "POST",
       headers: authHeaders(true),
       body: JSON.stringify({ username: username }),
     })
-      .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data.ok) {
           toast("已添加好友，去「会话」开始聊天吧");
@@ -1436,12 +1474,11 @@
 
   function removeFriend(username) {
     if (!confirm("确定删除好友「" + username + "」？双方的会话将保留在服务器上。")) return;
-    fetch(BASE + "/api/friends/remove", {
+    api(BASE + "/api/friends/remove", {
       method: "POST",
       headers: authHeaders(true),
       body: JSON.stringify({ username: username }),
     })
-      .then(function (res) { return res.json(); })
       .then(function (data) {
         if (data.ok) {
           toast("已删除好友「" + username + "」");

@@ -1,7 +1,7 @@
 {
   "name": "magichub-server",
-  "version": "0.1.0",
-  "description": "MagicHub 后端 · V0.1 极简连通版（WebSocket）",
+  "version": "0.2.0",
+  "description": "MagicHub 后端 · V0.2 安全加固（JWT/限流/上传鉴权/分片存储）",
   "private": true,
   "type": "module",
   "main": "server.js",

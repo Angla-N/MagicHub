@@ -2,12 +2,22 @@
  * MagicHub 后端（独立服务，前后端分离）
  *
  * 能力：
- *  1. 账号 API：POST /api/register（用户名/名字/密码/头像）、POST /api/login（返回 token）、GET /api/me
+ *  1. 账号 API：POST /api/register（用户名/名字/密码/头像 + 算术验证码）、POST /api/login（返回 token）、GET /api/me
  *  2. 聊天 API：通讯录 /api/users、好友 /api/friends(+add)、会话 /api/conversations、消息 /api/messages
  *  3. 插件 API：GET /api/plugins（扫描 plugins/）、/plugins/<id>/ 静态服务
- *  4. 头像静态服务：/avatars/<file>
+ *  4. 头像静态服务：/avatars/<file>；文件消息静态服务：/uploads/<file>（签名 URL 鉴权）
  *  5. WebSocket：客户端先发 {type:"auth",token} 绑定身份，新消息定向推送给会话对方
- *  6. CORS：允许前端独立部署（H5 或 Electron file://）跨域调用
+ *  6. CORS：Origin 白名单（前端独立部署：H5 / Electron file://）
+ *
+ * 安全（v0.2.0）：
+ *  - 登录 token 为签名 JWT（HMAC-SHA256），密钥持久化到 data/jwt-secret，重启不掉线；
+ *    载荷携带 tokenVersion，改密码后旧 token 全部失效
+ *  - 登录失败锁定（IP+账号 5 次锁 15 分钟）+ 登录/注册滑动窗口限流
+ *  - 注册需算术验证码（服务端出题、一次性、5 分钟有效）
+ *  - /uploads/ 文件需签名 URL（5 分钟有效）才能访问
+ *  - 上传文件扩展名白名单 + 文件头魔数校验（拒绝伪造扩展名/恶意脚本）
+ *  - CORS Origin 白名单
+ *  - 插件包解压后限制文件数/总大小（zip 炸弹防护）
  *
  * 启动：
  *  cd apps/server
@@ -19,16 +29,17 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, copyFileSync, renameSync, rmSync } from "node:fs";
 import { execFile } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { extname, join, normalize, sep, basename } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
-import { ensureStore, register, login, getUser, changePassword, AVATARS_DIR } from "./lib/user-store.js";
+import { ensureStore, register, login, getUser, getUserRecord, changePassword, AVATARS_DIR } from "./lib/user-store.js";
 import {
-  listUsers, listFriends, addFriend, removeFriend, listConversations, getMessages, addMessage, peerOf, markRead, DATA_DIR,
+  listUsers, listFriends, addFriend, removeFriend, listConversations, getMessages, addMessage, peerOf, markRead,
+  ensureChatStore, DATA_DIR,
 } from "./lib/chat-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -37,30 +48,150 @@ const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", 
 const SEVEN_ZIP = process.env.MAGICHUB_7Z || ""; // 7za.exe（用于插件包解压/打包）
 const UPLOADS_DIR = join(DATA_DIR, "uploads");
 const MAX_BODY = 12 * 1024 * 1024; // 请求体上限 12MB（头像 + 图片/文件消息 base64）
+const TOKEN_TTL_MS = 7 * 24 * 3600 * 1000; // token 有效期 7 天
 
-/* ---------- 登录会话（内存 token，重启后需重新登录） ---------- */
-const sessions = new Map(); // token -> { username, expiresAt }
+/* ================= JWT：签名 token（重启不掉线，改密可吊销） ================= */
+
+const JWT_SECRET_FILE = join(DATA_DIR, "jwt-secret");
+
+function loadJwtSecret() {
+  try {
+    if (existsSync(JWT_SECRET_FILE)) {
+      const s = readFileSync(JWT_SECRET_FILE, "utf8").trim();
+      if (s.length >= 16) return s;
+    }
+  } catch { /* 忽略 */ }
+  const s = randomBytes(32).toString("hex");
+  try {
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(JWT_SECRET_FILE, s, { encoding: "utf8", mode: 0o600 });
+  } catch (err) {
+    console.error(`[auth] 无法持久化 JWT 密钥（token 重启后仍将失效）: ${err.message}`);
+  }
+  return s;
+}
+const JWT_SECRET = loadJwtSecret();
+
+function signToken(username, tokenVersion) {
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const payload = Buffer.from(JSON.stringify({ u: username, v: tokenVersion || 0, exp })).toString("base64url");
+  const sig = createHmac("sha256", JWT_SECRET).update(payload).digest("base64url");
+  return payload + "." + sig;
+}
+
+function verifyToken(token) {
+  const m = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(token || ""));
+  if (!m) return null;
+  const expect = createHmac("sha256", JWT_SECRET).update(m[1]).digest("base64url");
+  const got = Buffer.from(m[2]);
+  const expBuf = Buffer.from(expect);
+  if (expBuf.length !== got.length || !timingSafeEqual(expBuf, got)) return null;
+  let p;
+  try { p = JSON.parse(Buffer.from(m[1], "base64url").toString("utf8")); } catch { return null; }
+  if (!p || typeof p.u !== "string" || typeof p.exp !== "number" || p.exp < Date.now()) return null;
+  // tokenVersion 校验：改密码后旧 token 失效
+  const record = getUserRecord(p.u);
+  if (!record) return null;
+  if ((record.tokenVersion || 0) !== (p.v || 0)) return null;
+  return p.u;
+}
 
 function issueToken(username) {
-  const token = randomBytes(24).toString("hex");
-  sessions.set(token, { username, expiresAt: Date.now() + 7 * 24 * 3600 * 1000 });
-  return token;
+  const record = getUserRecord(username);
+  return signToken(username, (record && record.tokenVersion) || 0);
 }
 
 function resolveToken(req) {
   const auth = req.headers.authorization || "";
   const m = /^Bearer\s+(\S+)$/.exec(auth);
   if (!m) return null;
-  const s = sessions.get(m[1]);
-  if (!s) return null;
-  if (s.expiresAt < Date.now()) {
-    sessions.delete(m[1]);
-    return null;
-  }
-  return s.username;
+  try { return verifyToken(m[1]); } catch { return null; }
 }
 
-ensureStore();
+/* ================= 限流与验证码 ================= */
+
+const LOGIN_FAILS = new Map(); // "login:<ip>:<user>" -> { fail, until, lockedUntil }
+const RATE_HITS = new Map();   // "reg:<ip>" / "login:<ip>" -> { hits, until }
+const CAPTCHAS = new Map();    // id -> { answer, exp }
+
+/** 登录失败锁定：5 次失败锁 15 分钟（按 IP+账号） */
+function loginKey(ip, username) { return "login:" + (ip || "?") + ":" + String(username || "").toLowerCase(); }
+function lockedRemaining(key) {
+  const e = LOGIN_FAILS.get(key);
+  if (e && e.lockedUntil && e.lockedUntil > Date.now()) return Math.ceil((e.lockedUntil - Date.now()) / 1000);
+  return 0;
+}
+function recordLoginFail(key) {
+  const now = Date.now();
+  let e = LOGIN_FAILS.get(key);
+  if (!e || e.until < now) e = { fail: 0, until: now + 60 * 60 * 1000, lockedUntil: 0 };
+  e.fail++;
+  if (e.fail >= 5) e.lockedUntil = now + 15 * 60 * 1000;
+  LOGIN_FAILS.set(key, e);
+  return e;
+}
+function clearLoginFails(key) { LOGIN_FAILS.delete(key); }
+
+/** 滑动窗口计数限流：超过 limit 返回 true */
+function hitRate(key, limit, windowMs) {
+  const now = Date.now();
+  let e = RATE_HITS.get(key);
+  if (!e || e.until < now) e = { hits: 0, until: now + windowMs };
+  e.hits++;
+  RATE_HITS.set(key, e);
+  return e.hits > limit;
+}
+
+/** 注册算术验证码：服务端出题，一次性，5 分钟有效 */
+function newCaptcha() {
+  const a = 1 + Math.floor(Math.random() * 9);
+  const b = 1 + Math.floor(Math.random() * 9);
+  const id = randomBytes(8).toString("hex");
+  CAPTCHAS.set(id, { answer: String(a + b), exp: Date.now() + 5 * 60 * 1000 });
+  // 懒清理：超过 400 个时清掉过期项
+  if (CAPTCHAS.size > 400) {
+    const now = Date.now();
+    for (const [k, v] of CAPTCHAS) if (v.exp < now) CAPTCHAS.delete(k);
+  }
+  return { id, question: `${a} + ${b} = ?` };
+}
+function checkCaptcha(id, answer) {
+  const e = CAPTCHAS.get(String(id || ""));
+  if (!e || e.exp < Date.now()) { CAPTCHAS.delete(String(id || "")); return false; }
+  if (String(answer || "").trim() !== e.answer) return false;
+  CAPTCHAS.delete(String(id || "")); // 一次性
+  return true;
+}
+
+// 定时清理限流与验证码（不阻止进程退出）
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, e] of LOGIN_FAILS) {
+    if ((!e.lockedUntil || e.lockedUntil < now) && e.until < now) LOGIN_FAILS.delete(k);
+  }
+  for (const [k, e] of RATE_HITS) if (e.until < now) RATE_HITS.delete(k);
+  for (const [k, v] of CAPTCHAS) if (v.exp < now) CAPTCHAS.delete(k);
+}, 60 * 1000).unref();
+
+/* ================= CORS Origin 白名单 ================= */
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173", "http://127.0.0.1:5173",
+  "http://localhost:3000", "http://127.0.0.1:3000",
+];
+const ALLOWED_ORIGINS = new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...(process.env.MAGICHUB_CORS_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean),
+]);
+
+/** 按请求 Origin 计算允许的 CORS 头；null 表示拒绝（不返回 CORS 头，浏览器拦截） */
+function corsAllow(origin) {
+  if (!origin || origin === "null") return "*"; // 无 Origin（同源/curl）或 file:// 页面（Electron）
+  return ALLOWED_ORIGINS.has(origin) ? origin : null;
+}
+
+await ensureStore();
+ensureChatStore();
 
 /* ================= 插件市场 ================= */
 
@@ -68,10 +199,11 @@ ensureStore();
  * 插件存储模型（data/plugins/）—— 只保留压缩包，不留源码：
  *  - <id>.7z         插件安装包（唯一存储形态，客户端下载后本地解压运行）
  *  - .meta/<id>.json 市场元信息 { author, public, uploadedAt }
- * 开发模式兼容：若目录里是旧源码目录（含 manifest.json，仓库内置插件），仍可列出，
- * 下载时现场打 .7z 落盘；Server 打包场景数据目录下只有 .7z。
+ *  - .icons/<id>.<ext> 从 .7z 内提取的图标（上传时提取，市场列表直接引用）
  */
 const PLUGIN_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+const PLUGIN_MAX_FILES = 200;   // 解压后文件数上限（zip 炸弹防护）
+const PLUGIN_MAX_BYTES = 50 * 1024 * 1024; // 解压后总大小上限
 
 function pluginMetaPath(id) { return join(PLUGINS_ROOT, ".meta", id + ".json"); }
 function pluginArchivePath(id) { return join(PLUGINS_ROOT, id + ".7z"); }
@@ -111,7 +243,7 @@ function readPluginMeta(id) {
   return { author: "system", public: true, uploadedAt: 0 };
 }
 
-/** 校验插件包解压结果：manifest.json 必须存在且合法，id 必须安全合法 */
+/** 校验插件包解压结果：manifest.json 必须存在且合法，id 必须安全合法，entry 防路径穿越 */
 function validateExtracted(dir, expectedId) {
   const mf = join(dir, "manifest.json");
   if (!existsSync(mf)) return { ok: false, error: "压缩包内缺少 manifest.json（请用插件打包工具生成）" };
@@ -124,10 +256,13 @@ function validateExtracted(dir, expectedId) {
   if (expectedId && id !== expectedId) return { ok: false, error: "插件 id 与文件名不一致：" + id };
   if (!String(m.name || "").trim()) return { ok: false, error: "manifest.name 不能为空" };
   if (!String(m.version || "").trim()) return { ok: false, error: "manifest.version 不能为空" };
+  // entry 防路径穿越：规范化后必须位于插件目录内
   const entry = String(m.entry || "index.html");
   const entryFile = join(dir, entry);
-  if (!existsSync(entryFile) || !statSync(entryFile).isFile()) {
-    return { ok: false, error: "入口文件不存在：" + entry };
+  const relEntry = normalize(entry).replace(/^([/\\])+/, "");
+  const safe = relEntry && relEntry !== ".." && !relEntry.startsWith(".." + sep) && !relEntry.includes(".." + sep);
+  if (!safe || !existsSync(entryFile) || !statSync(entryFile).isFile()) {
+    return { ok: false, error: "入口文件不存在或路径不合法：" + entry };
   }
   return { ok: true, manifest: m };
 }
@@ -158,6 +293,28 @@ function createArchive(dir, pack) {
       else resolve({ ok: true });
     });
   });
+}
+
+/** 解压目录规模统计与上限校验（zip 炸弹防护）：超限抛错 */
+function assertArchiveLimits(root) {
+  let files = 0, bytes = 0;
+  const stack = [root];
+  while (stack.length) {
+    const d = stack.pop();
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      const st = statSync(p);
+      if (st.isDirectory()) stack.push(p);
+      else {
+        files++;
+        bytes += st.size;
+        if (files > PLUGIN_MAX_FILES || bytes > PLUGIN_MAX_BYTES) {
+          throw new Error(`插件包解压后过大（>${PLUGIN_MAX_FILES} 个文件 / >${Math.round(PLUGIN_MAX_BYTES / 1024 / 1024)}MB），疑似压缩炸弹`);
+        }
+      }
+    }
+  }
+  return { files, bytes };
 }
 
 /** 扫描插件市场（data/plugins/*.7z + .meta/*.json；兼容旧源码目录），返回市场列表 */
@@ -217,7 +374,7 @@ function listPlugins() {
   return out;
 }
 
-/** 上传插件（7Z 包）：校验 → 解压（临时目录）→ 只保留 .7z 存档 + .meta 元数据 */
+/** 上传插件（7Z 包）：校验 → 解压（临时目录）→ 炸弹防护 → 只保留 .7z 存档 + .meta 元数据 */
 async function uploadPlugin(username, payload) {
   const name = String(payload.name || "");
   if (!/\.7z$/i.test(name)) return { ok: false, error: { code: "BAD_PACKAGE", message: "请上传 .7z 格式的插件包" } };
@@ -237,6 +394,13 @@ async function uploadPlugin(username, payload) {
   if (!ex.ok) {
     rmSync(tmpRoot, { recursive: true, force: true });
     return { ok: false, error: { code: "BAD_PACKAGE", message: ex.error } };
+  }
+  // 解压规模校验（zip 炸弹防护）
+  try {
+    assertArchiveLimits(outDir);
+  } catch (err) {
+    rmSync(tmpRoot, { recursive: true, force: true });
+    return { ok: false, error: { code: "BAD_PACKAGE", message: err.message } };
   }
   // 解压结果可能在子目录（不同打包工具的目录结构不同）→ 向下最多 2 层找含 manifest.json 的目录
   let root = outDir;
@@ -410,13 +574,22 @@ function readBody(req) {
   });
 }
 
-function sendJson(res, status, payload) {
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+function corsHeaders(origin) {
+  const allow = corsAllow(origin);
+  if (allow === null) return null;
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  });
+  };
+}
+
+function sendJson(res, status, payload) {
+  const origin = (res.req && res.req.headers && res.req.headers.origin) || "";
+  const headers = { "Content-Type": "application/json; charset=utf-8" };
+  const cors = corsHeaders(origin);
+  if (cors) Object.assign(headers, cors);
+  res.writeHead(status, headers);
   res.end(JSON.stringify(payload));
 }
 
@@ -429,14 +602,99 @@ function resolveInRoot(baseRoot, urlPath) {
   return file;
 }
 
-/** 保存上传文件到 data/uploads，返回静态访问路径 */
+/* ---------- 上传文件安全：扩展名白名单 + 文件头魔数校验 ---------- */
+
+const UPLOAD_EXT_WHITELIST = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".webp",
+  ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+  ".txt", ".md",
+  ".zip", ".rar", ".7z",
+  ".mp3", ".wav", ".mp4", ".mov",
+]);
+
+/** 按文件头魔数识别真实类型；无法识别返回 null */
+function sniffType(buf) {
+  if (!buf || buf.length < 4) return null;
+  const head = (s, off) => buf.slice(off || 0, (off || 0) + s.length).toString("latin1");
+  // 图片
+  if (buf.length >= 8 && buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpeg";
+  if (buf.length >= 6 && (head("GIF87a") === "GIF87a" || head("GIF89a") === "GIF89a")) return "gif";
+  if (buf.length >= 12 && head("RIFF") === "RIFF" && head("WEBP", 8) === "WEBP") return "webp";
+  // 文档
+  if (buf.length >= 5 && head("%PDF-") === "%PDF-") return "pdf";
+  if (buf.length >= 8 && buf.slice(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))) return "cfb"; // doc/xls/ppt 旧格式
+  if (buf.length >= 4 && buf.slice(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) return "zip"; // zip / docx/xlsx/pptx
+  // 压缩包
+  if (buf.length >= 6 && buf.slice(0, 6).equals(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]))) return "7z";
+  if (buf.length >= 7 && head("Rar!\x1a\x07") === "Rar!\x1a\x07") return "rar";
+  // 文本
+  if (buf.length >= 1024 && !buf.slice(0, 1024).includes(0)) return "text"; // 前 1KB 无 NUL，视为文本
+  // 音视频
+  if (buf.length >= 4 && head("ID3") === "ID3") return "mp3";
+  if (buf.length >= 3 && buf[0] === 0xff && (buf[1] === 0xfb || buf[1] === 0xf2 || buf[1] === 0xf3 || buf[1] === 0xfa)) return "mp3";
+  if (buf.length >= 12 && head("RIFF") === "RIFF" && head("WAVE", 8) === "WAVE") return "wav";
+  if (buf.length >= 8 && head("ftyp", 4) === "ftyp") return "mp4";
+  return null;
+}
+
+/** 扩展名与魔数匹配表（value 可为数组） */
+const EXT_SNIFF = {
+  ".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg", ".gif": "gif", ".webp": "webp",
+  ".pdf": "pdf",
+  ".doc": ["cfb", "zip"], ".docx": "zip", ".xls": ["cfb", "zip"], ".xlsx": "zip",
+  ".ppt": ["cfb", "zip"], ".pptx": "zip",
+  ".txt": "text", ".md": "text",
+  ".zip": "zip", ".rar": "rar", ".7z": "7z",
+  ".mp3": "mp3", ".wav": "wav", ".mp4": ["mp4", "quicktime"], ".mov": ["mp4", "quicktime"],
+};
+
+/** 校验上传内容：扩展名在白名单且魔数匹配；返回 { ok } 或 { ok:false, error } */
+function validateUpload(buf, origName) {
+  const ext = extname(origName || "").toLowerCase();
+  if (!UPLOAD_EXT_WHITELIST.has(ext)) {
+    return { ok: false, error: "文件类型不受支持（仅允许图片/常见文档/压缩包/音视频，禁止脚本与网页文件）" };
+  }
+  const sniff = sniffType(buf);
+  const expect = EXT_SNIFF[ext];
+  const ok = sniff !== null && (Array.isArray(expect) ? expect.includes(sniff) : expect === sniff);
+  if (!ok) {
+    return { ok: false, error: "文件内容与扩展名不符，已拒绝（请确认文件未损坏或未被改名）" };
+  }
+  return { ok: true };
+}
+
+/** 保存上传文件到 data/uploads（校验通过后），返回静态访问路径 */
 function saveUploadFile(base64, origName) {
+  const buf = decodeBase64Payload(base64);
+  if (!buf.length) return null;
+  const v = validateUpload(buf, origName);
+  if (!v.ok) return null;
   if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true });
   const rawExt = extname(origName || "").toLowerCase();
   const safeExt = /^[.\w-]{1,12}$/.test(rawExt) ? rawExt : ".bin";
-  const name = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + safeExt;
-  writeFileSync(join(UPLOADS_DIR, name), base64);
+  const name = Date.now() + "-" + randomBytes(4).toString("hex") + safeExt;
+  // 二进制原子写
+  const file = join(UPLOADS_DIR, name);
+  const tmp = file + ".tmp-" + process.pid + "-" + Date.now();
+  writeFileSync(tmp, buf);
+  try { renameSync(tmp, file); } catch { rmSync(tmp, { force: true }); throw new Error("写入失败"); }
   return "/uploads/" + name;
+}
+
+/** 上传文件签名 URL：/uploads/<file>?sig=..&exp=..（5 分钟有效，需登录获取） */
+function signUploadPath(path) {
+  const exp = Date.now() + 5 * 60 * 1000;
+  const data = path + "|" + exp;
+  const sig = createHmac("sha256", JWT_SECRET).update(data).digest("hex");
+  return "/uploads/" + path.slice("/uploads/".length) + "?sig=" + sig + "&exp=" + exp;
+}
+function verifyUploadSig(path, qs) {
+  const sig = qs.get("sig");
+  const exp = Number(qs.get("exp") || 0);
+  if (!sig || !exp || exp < Date.now()) return false;
+  const expect = createHmac("sha256", JWT_SECRET).update(path + "|" + exp).digest("hex");
+  return timingSafeEqual(Buffer.from(expect), Buffer.from(String(sig)));
 }
 
 /** 兼容带 data URL 前缀或纯 base64 两种输入 */
@@ -456,31 +714,49 @@ async function serveStatic(res, file) {
   }
   const type = MIME[extname(file).toLowerCase()] || "application/octet-stream";
   const body = await readFile(file);
-  res.writeHead(200, {
+  const headers = {
     "Content-Type": type,
     "Content-Length": body.length,
-    "Access-Control-Allow-Origin": "*",
     "Cache-Control": "no-cache",
-  });
+  };
+  // 静态服务兜底：脚本/网页类文件一律附件下载，绝不内联渲染
+  const ext = extname(file).toLowerCase();
+  if (ext === ".html" || ext === ".svg" || ext === ".js") headers["Content-Disposition"] = "attachment";
+  const origin = (res.req && res.req.headers && res.req.headers.origin) || "";
+  const cors = corsHeaders(origin);
+  if (cors) Object.assign(headers, cors);
+  res.writeHead(200, headers);
   res.end(body);
 }
 
 const httpServer = createServer(async (req, res) => {
   const method = req.method || "GET";
   const urlPath = (req.url || "/").split("?")[0];
+  const qs = new URLSearchParams((req.url || "").split("?")[1] || "");
+  const origin = req.headers.origin || "";
 
   try {
     // ---- CORS 预检 ----
     if (method === "OPTIONS") {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      });
+      const cors = corsHeaders(origin);
+      if (!cors) {
+        res.writeHead(403);
+        return res.end("Origin not allowed");
+      }
+      res.writeHead(204, cors);
       return res.end();
     }
 
-    // ---- 账号 API ----
+    // ---- 注册验证码：GET /api/register/captcha ----
+    if (method === "GET" && urlPath === "/api/register/captcha") {
+      // 防止脚本刷题：同 IP 每分钟最多 20 次
+      if (hitRate("captcha:" + (req.socket.remoteAddress || "?"), 20, 60 * 1000)) {
+        return sendJson(res, 429, { ok: false, error: { code: "RATE_LIMITED", message: "获取验证码过于频繁，请稍后再试" } });
+      }
+      return sendJson(res, 200, { ok: true, data: newCaptcha() });
+    }
+
+    // ---- 账号 API：注册（需验证码）/ 登录（限流） ----
     if (method === "POST" && (urlPath === "/api/register" || urlPath === "/api/login")) {
       let payload;
       try {
@@ -492,14 +768,40 @@ const httpServer = createServer(async (req, res) => {
       } catch {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
       }
+      const ip = req.socket.remoteAddress || "?";
 
       let result;
       if (urlPath === "/api/register") {
-        result = register(payload.username, payload.password, payload.displayName, payload.avatar);
+        // 注册滑动限流：同 IP 60 分钟内最多 10 次
+        if (hitRate("reg:" + ip, 10, 60 * 60 * 1000)) {
+          return sendJson(res, 429, { ok: false, error: { code: "RATE_LIMITED", message: "注册过于频繁，请 1 小时后再试" } });
+        }
+        // 算术验证码：服务端出题，一次性
+        if (!checkCaptcha(payload.captchaId, payload.captchaAnswer)) {
+          return sendJson(res, 400, { ok: false, error: { code: "BAD_CAPTCHA", message: "验证码错误或已过期，请刷新后重试" } });
+        }
+        result = await register(payload.username, payload.password, payload.displayName, payload.avatar);
       } else {
-        result = login(payload.username, payload.password);
+        // 登录：同 IP 15 分钟内最多 60 次尝试（防多账号枚举）
+        if (hitRate("login:" + ip, 60, 15 * 60 * 1000)) {
+          return sendJson(res, 429, { ok: false, error: { code: "RATE_LIMITED", message: "登录尝试过于频繁，请稍后再试" } });
+        }
+        // 登录失败锁定：IP+账号 5 次失败锁 15 分钟
+        const key = loginKey(ip, payload.username);
+        const locked = lockedRemaining(key);
+        if (locked > 0) {
+          return sendJson(res, 429, { ok: false, error: { code: "LOCKED", message: `尝试次数过多，请 ${Math.ceil(locked / 60)} 分钟后重试` } });
+        }
+        result = await login(payload.username, payload.password);
         if (result.ok) {
           result.data.token = issueToken(result.data.username);
+          clearLoginFails(key);
+        } else {
+          const e = recordLoginFail(key);
+          const remain = e.lockedUntil && e.lockedUntil > Date.now() ? Math.ceil((e.lockedUntil - Date.now()) / 1000) : 0;
+          if (remain > 0) {
+            result.error = { code: "LOCKED", message: `尝试次数过多，请 ${Math.ceil(remain / 60)} 分钟后重试` };
+          }
         }
       }
       return sendJson(res, result.ok ? 200 : 400, result);
@@ -529,7 +831,7 @@ const httpServer = createServer(async (req, res) => {
       } else if (urlPath === "/api/conversations/read") {
         result = markRead(payload.convId, username);
       } else {
-        // 文件消息：base64 解码落盘（≤8MB），再存消息元数据
+        // 文件消息：base64 解码 → 类型/魔数校验 → 落盘（≤8MB），再存消息元数据
         let fileMeta = null;
         const pf = payload.file;
         if (pf && pf.data) {
@@ -537,8 +839,12 @@ const httpServer = createServer(async (req, res) => {
           if (buf.length > 8 * 1024 * 1024) {
             return sendJson(res, 400, { ok: false, error: { code: "FILE_TOO_LARGE", message: "文件不能超过 8MB" } });
           }
+          const savedUrl = saveUploadFile(pf.data, pf.name); // 内部做扩展名白名单 + 魔数校验
+          if (!savedUrl) {
+            return sendJson(res, 400, { ok: false, error: { code: "FILE_REJECTED", message: "文件类型不受支持或内容与扩展名不符" } });
+          }
           fileMeta = {
-            url: saveUploadFile(buf, pf.name),
+            url: savedUrl,
             name: String(pf.name || "file"),
             type: String(pf.type || "application/octet-stream"),
             size: Number(pf.size) || buf.length,
@@ -556,7 +862,7 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
-    // ---- 账号：修改密码（POST，需登录）----
+    // ---- 账号：修改密码（POST，需登录；改密后旧 token 全部失效）----
     if (urlPath === "/api/account/password" && method === "POST") {
       const username = resolveToken(req);
       if (!username) {
@@ -575,7 +881,7 @@ const httpServer = createServer(async (req, res) => {
       if (typeof payload.oldPassword !== "string" || typeof payload.newPassword !== "string") {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "缺少原密码或新密码" } });
       }
-      const result = changePassword(username, payload.oldPassword, payload.newPassword);
+      const result = await changePassword(username, payload.oldPassword, payload.newPassword);
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
@@ -638,6 +944,22 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, data: getUser(username) });
     }
 
+    // ---- 上传文件签名 URL：GET /api/uploads/sign?path=/uploads/<file>（需登录）----
+    if (urlPath === "/api/uploads/sign") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      const path = qs.get("path") || "";
+      if (!/^\/uploads\/[A-Za-z0-9._-]+$/.test(path)) {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "路径不合法" } });
+      }
+      if (!existsSync(join(UPLOADS_DIR, basename(path)))) {
+        return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "文件不存在或已过期" } });
+      }
+      return sendJson(res, 200, { ok: true, data: { url: signUploadPath(path) } });
+    }
+
     // ---- 聊天 API：通讯录 / 好友 / 会话 / 消息历史（GET，需登录） ----
     if (urlPath === "/api/users" || urlPath === "/api/friends" || urlPath === "/api/conversations" || urlPath === "/api/messages") {
       const username = resolveToken(req);
@@ -653,13 +975,12 @@ const httpServer = createServer(async (req, res) => {
       if (urlPath === "/api/conversations") {
         return sendJson(res, 200, { ok: true, data: { conversations: listConversations(username) } });
       }
-      const qs = new URLSearchParams((req.url || "").split("?")[1] || "");
       const conv = qs.get("conv");
       if (!conv) {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "缺少 conv 参数" } });
       }
       const messages = getMessages(conv, username);
-      if (!messages) {
+      if (messages === null) {
         return sendJson(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问（请先添加好友）" } });
       }
       return sendJson(res, 200, { ok: true, data: { messages } });
@@ -718,8 +1039,11 @@ const httpServer = createServer(async (req, res) => {
       return await serveStatic(res, file);
     }
 
-    // ---- 上传文件（图片/文档等）：/uploads/<file> ----
+    // ---- 上传文件（图片/文档等）：/uploads/<file> —— 需签名 URL（5 分钟有效）----
     if (urlPath.startsWith("/uploads/")) {
+      if (!verifyUploadSig(urlPath, qs)) {
+        return sendJson(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "链接已过期或无效，请从会话中重新打开" } });
+      }
       const file = resolveInRoot(UPLOADS_DIR, urlPath.slice("/uploads/".length));
       return await serveStatic(res, file);
     }
@@ -731,7 +1055,7 @@ const httpServer = createServer(async (req, res) => {
   }
 });
 
-/* ================= WebSocket：登录认证 + 定向推送 ================= */
+/* ================= WebSocket：登录认证（JWT）+ 定向推送 ================= */
 
 const wss = new WebSocketServer({ server: httpServer });
 const wsClients = new Map(); // username -> Set<ws>（同一账号可多端在线，全部实时送达）
@@ -759,9 +1083,9 @@ wss.on("connection", (ws) => {
       return;
     }
     if (frame && frame.type === "auth" && frame.token) {
-      const s = sessions.get(String(frame.token));
-      if (s && s.expiresAt >= Date.now()) {
-        ws.username = s.username;
+      const username = verifyToken(String(frame.token));
+      if (username) {
+        ws.username = username;
         if (!wsClients.has(ws.username)) wsClients.set(ws.username, new Set());
         wsClients.get(ws.username).add(ws);
         ws.send(JSON.stringify({ type: "auth_ok", username: ws.username }));
@@ -792,5 +1116,6 @@ httpServer.listen(PORT, () => {
   console.log(`  websocket -> ws://localhost:${PORT}`);
   console.log(`  plugins   -> ${PLUGINS_ROOT}`);
   console.log(`  avatars   -> ${AVATARS_DIR}`);
+  console.log(`  uploads   -> ${UPLOADS_DIR}（签名 URL 鉴权）`);
   console.log(`（前端页面由 apps/web 独立提供，本服务不托管页面）`);
 });

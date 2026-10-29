@@ -48,6 +48,34 @@ function keepInBackground() {
 }
 
 /* ---- 本地插件 ---- */
+/** 插件入口路径防穿越：规范化后必须位于插件目录内，非法返回 null */
+function safePluginEntry(dir, entry) {
+  const p = path.resolve(dir, String(entry || "index.html"));
+  if (p !== dir && !p.startsWith(dir + path.sep)) return null;
+  return p;
+}
+
+/** 递归统计目录文件数与总大小；超过上限抛错（zip 炸弹防护） */
+function assertDirLimits(dir, maxFiles = 200, maxBytes = 50 * 1024 * 1024) {
+  let files = 0, bytes = 0;
+  const stack = [dir];
+  while (stack.length) {
+    const d = stack.pop();
+    for (const n of fs.readdirSync(d)) {
+      const p = path.join(d, n);
+      const st = fs.statSync(p);
+      if (st.isDirectory()) stack.push(p);
+      else {
+        files++;
+        bytes += st.size;
+        if (files > maxFiles || bytes > maxBytes) {
+          throw new Error(`插件解压后过大（>${maxFiles} 个文件 / >${Math.round(maxBytes / 1024 / 1024)}MB），已拒绝`);
+        }
+      }
+    }
+  }
+}
+
 function listLocalPlugins() {
   const out = [];
   if (!fs.existsSync(localPluginsDir)) return out;
@@ -58,6 +86,8 @@ function listLocalPlugins() {
     if (!fs.existsSync(mf)) continue;
     try {
       const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+      const entry = safePluginEntry(dir, m.entry || "index.html");
+      if (!entry) { console.error(`[magichub-client] 跳过插件 ${name}：入口路径不合法`); continue; }
       out.push({
         id: String(m.id || name),
         name: m.name || name,
@@ -65,7 +95,7 @@ function listLocalPlugins() {
         description: m.description || "",
         entry: m.entry || "index.html",
         icon: m.icon || "",
-        localEntry: "file:///" + path.join(dir, m.entry || "index.html").replace(/\\/g, "/"),
+        localEntry: "file:///" + entry.replace(/\\/g, "/"),
         installedAt: fs.statSync(dir).mtimeMs,
       });
     } catch { /* 跳过损坏的本地插件 */ }
@@ -73,7 +103,7 @@ function listLocalPlugins() {
   return out;
 }
 
-/** 解压 .7z 安装包到本地插件目录（校验 manifest） */
+/** 解压 .7z 安装包到本地插件目录（校验 manifest + 入口防穿越 + 解压规模限制） */
 function extractPluginArchive(id, packPath) {
   return new Promise((resolve, reject) => {
     const dest = path.join(localPluginsDir, id);
@@ -88,6 +118,14 @@ function extractPluginArchive(id, packPath) {
         reject(new Error("解压失败：" + err.message));
         return;
       }
+      // zip 炸弹防护：文件数/总大小上限
+      try {
+        assertDirLimits(dest);
+      } catch (e) {
+        try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* 忽略 */ }
+        reject(new Error(e.message));
+        return;
+      }
       const mf = path.join(dest, "manifest.json");
       if (!fs.existsSync(mf)) {
         try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* 忽略 */ }
@@ -99,6 +137,12 @@ function extractPluginArchive(id, packPath) {
         if (String(m.id || "") !== id) {
           try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* 忽略 */ }
           reject(new Error("manifest.id 与插件名不一致"));
+          return;
+        }
+        const entry = safePluginEntry(dest, m.entry || "index.html");
+        if (!entry) {
+          try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* 忽略 */ }
+          reject(new Error("插件入口路径不合法（禁止越出插件目录）"));
           return;
         }
         resolve({

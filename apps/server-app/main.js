@@ -101,6 +101,8 @@ app.whenReady().then(() => {
       MAGICHUB_7Z: sevenZip,
       MAGICHUB_SERVER_DIR: serverDir,
       MAGICHUB_LOG: path.join(dataDir, "server.log"),
+      // 打包部署标记：禁用内置演示账号（demo/demo123 仅开发模式预置）
+      MAGICHUB_PACKAGED: app.isPackaged ? "1" : "0",
     },
   });
 

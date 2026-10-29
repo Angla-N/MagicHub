@@ -153,6 +153,7 @@
 
 /* 图片消息 */
 .msg-img{display:block;max-width:260px;max-height:220px;border-radius:12px;object-fit:cover;cursor:zoom-in;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.msg-img.img-broken{display:flex;align-items:center;justify-content:center;min-width:120px;min-height:80px;background:var(--surface-2);color:var(--text-3)}
 .bubble.has-img{padding:3px;background:rgba(255,255,255,.028);border-color:rgba(124,58,237,.12)}
 
 /* 文件卡片 */
