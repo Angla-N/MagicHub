@@ -23,4 +23,6 @@ contextBridge.exposeInMainWorld("magicHub", {
   listLocalPlugins: () => ipcRenderer.invoke("plugins:listLocal"),
   installPlugin: (id, buffer) => ipcRenderer.invoke("plugins:install", { id, buffer }),
   uninstallPlugin: (id) => ipcRenderer.invoke("plugins:uninstall", id),
+  /* P2：#24 插件启用/禁用 */
+  setPluginEnabled: (id, enabled) => ipcRenderer.invoke("plugins:setEnabled", id, !!enabled),
 });

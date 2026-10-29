@@ -36,9 +36,9 @@ import { extname, join, normalize, sep, basename } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
-import { ensureStore, register, login, getUser, getUserRecord, changePassword, AVATARS_DIR } from "./lib/user-store.js";
+import { ensureStore, register, login, getUser, getUserRecord, changePassword, updateProfile, AVATARS_DIR } from "./lib/user-store.js";
 import {
-  listUsers, listFriends, addFriend, removeFriend, listConversations, getMessages, addMessage, peerOf, markRead,
+  listUsers, listFriends, addFriend, removeFriend, listConversations, getMessages, getMessagesBefore, addMessage, peerOf, markRead,
   recallMessage, searchMessages,
   ensureChatStore, DATA_DIR,
 } from "./lib/chat-store.js";
@@ -341,6 +341,7 @@ function listPlugins() {
       author: meta.author || "system",
       public: meta.public !== false,
       uploadedAt: meta.uploadedAt || 0,
+      updatedAt: meta.updatedAt || meta.uploadedAt || 0, // P2：#23 更新机制（版本比较用）
       hasArchive: true,
     });
     seen.add(id);
@@ -420,18 +421,26 @@ async function uploadPlugin(username, payload) {
     return { ok: false, error: { code: "BAD_PACKAGE", message: v.error } };
   }
   const id = v.manifest.id;
-  if (existsSync(pluginArchivePath(id)) || existsSync(join(PLUGINS_ROOT, id))) {
-    rmSync(tmpRoot, { recursive: true, force: true });
-    return { ok: false, error: { code: "EXISTS", message: "插件「" + id + "」已存在（可在插件市场中删除后重新上传）" } };
+  // P2：#23 同名插件：作者本人可覆盖更新（版本升级）；他人则拒绝
+  const existingArchive = pluginArchivePath(id);
+  const existingDir = join(PLUGINS_ROOT, id);
+  if (existsSync(existingArchive) || existsSync(existingDir)) {
+    const oldMeta = readPluginMeta(id);
+    if (oldMeta.author !== username) {
+      rmSync(tmpRoot, { recursive: true, force: true });
+      return { ok: false, error: { code: "EXISTS", message: "插件「" + id + "」已存在（可在插件市场中删除后重新上传）" } };
+    }
   }
   mkdirSync(PLUGINS_ROOT, { recursive: true });
   mkdirSync(join(PLUGINS_ROOT, ".meta"), { recursive: true });
   try {
     copyFileSync(packPath, pluginArchivePath(id));
+    const prev = existsSync(pluginMetaPath(id)) ? readPluginMeta(id) : {};
     const meta = {
       author: username,
-      public: false,
-      uploadedAt: Date.now(),
+      public: prev.public !== undefined ? prev.public : false, // 更新保留公开状态
+      uploadedAt: prev.uploadedAt || Date.now(),               // 首次上传时间
+      updatedAt: Date.now(),                                   // 最近一次上传时间（更新机制用）
       manifest: {
         name: v.manifest.name,
         version: v.manifest.version,
@@ -441,16 +450,18 @@ async function uploadPlugin(username, payload) {
       },
     };
     writeFileSync(pluginMetaPath(id), JSON.stringify(meta, null, 2));
-    // 提取 .7z 内的图标到 .icons/（市场列表直接引用，无需解压包）
+    // 提取 .7z 内的图标到 .icons/（市场列表直接引用，无需解压包；更新时覆盖旧图标）
+    const oldIcon = findPluginIcon(id);
+    if (oldIcon) rmSync(oldIcon, { force: true });
     extractPluginIcon(id, root, v.manifest.icon);
+    console.log(`[plugins] ${username} ${prev.uploadedAt ? "更新" : "上传"}插件: ${id} v${v.manifest.version}`);
+    return { ok: true, data: { id, name: v.manifest.name, version: v.manifest.version, updated: !!prev.uploadedAt } };
   } catch (err) {
     rmSync(tmpRoot, { recursive: true, force: true });
     return { ok: false, error: { code: "INTERNAL", message: "插件入库失败：" + err.message } };
   } finally {
     rmSync(tmpRoot, { recursive: true, force: true });
   }
-  console.log(`[plugins] ${username} 上传插件: ${id} v${v.manifest.version}`);
-  return { ok: true, data: { id, name: v.manifest.name, version: v.manifest.version } };
 }
 
 /** 删除插件（仅上传者 / system 内置插件不可删） */
@@ -1060,6 +1071,30 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 
+    // ---- 账号：更新个人资料（昵称/头像，P2：#22，POST，需登录）----
+    if (urlPath === "/api/account/profile" && method === "POST") {
+      const username = resolveToken(req);
+      if (!username) {
+        return sendJson(res, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "未登录或会话已过期" } });
+      }
+      let payload = {};
+      try {
+        const b = await readBody(req);
+        if (!b.ok) {
+          return sendJson(res, 413, { ok: false, error: { code: "BODY_TOO_LARGE", message: "请求体过大" } });
+        }
+        payload = JSON.parse(b.raw || "{}");
+      } catch {
+        return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "请求体不是合法 JSON" } });
+      }
+      const result = updateProfile(
+        username,
+        payload.displayName !== undefined ? payload.displayName : undefined,
+        payload.avatar !== undefined ? payload.avatar : undefined
+      );
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
     // ---- 插件市场：上传 / 公开设置（POST，需登录）----
     if (urlPath === "/api/plugins/upload" && method === "POST") {
       const username = resolveToken(req);
@@ -1154,11 +1189,27 @@ const httpServer = createServer(async (req, res) => {
       if (!conv) {
         return sendJson(res, 400, { ok: false, error: { code: "BAD_REQUEST", message: "缺少 conv 参数" } });
       }
-      const messages = getMessages(conv, username);
-      if (messages === null) {
+      // P2：#26 滚动分页：before=<ts> 时返回该时间之前的历史；不传则返回最新（默认最近 200 条）
+      const before = Number(qs.get("before"));
+      const loaded = Number.isFinite(before) && before > 0
+        ? getMessagesBefore(conv, username, before, 50)
+        : getMessages(conv, username);
+      if (loaded === null) {
         return sendJson(res, 403, { ok: false, error: { code: "FORBIDDEN", message: "会话不存在或无权访问（请先添加好友）" } });
       }
-      return sendJson(res, 200, { ok: true, data: { messages: messages.messages, peerLastRead: messages.peerLastRead, peer: messages.peer } });
+      let msgs = loaded.messages;
+      let hasMore = loaded.hasMore || false;
+      if (!Number.isFinite(before) || before <= 0) {
+        // 首次加载：只取最近 200 条，超出则 hasMore=true（顶部可继续加载更早）
+        if (msgs.length > 200) {
+          hasMore = true;
+          msgs = msgs.slice(-200);
+        }
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        data: { messages: msgs, peerLastRead: loaded.peerLastRead, peer: loaded.peer, hasMore },
+      });
     }
 
     // ---- 全局消息搜索：GET /api/search?q=（需登录，跨我的全部会话）----
@@ -1282,6 +1333,28 @@ function pushToPeer(username, frame) {
   }
 }
 
+/** P2：#27 在线状态：向该用户全部好友广播 presence 帧 */
+function broadcastPresence(username, online) {
+  for (const f of listFriends(username)) {
+    pushToPeer(f.username, { type: "presence", data: { username, online } });
+  }
+}
+
+/** P2：#27 给新认证连接下发好友在线清单（presence_map） */
+function sendPresenceMap(ws, username) {
+  const online = [];
+  for (const f of listFriends(username)) {
+    if (wsClients.has(f.username)) online.push(f.username);
+  }
+  ws.send(JSON.stringify({ type: "presence_map", data: { online } }));
+}
+
+/** 用户是否还有任何在线连接 */
+function userHasConnections(username) {
+  const conns = wsClients.get(username);
+  return !!(conns && conns.size);
+}
+
 wss.on("connection", (ws) => {
   console.log(`[ws] client connected (total: ${wss.clients.size})`);
 
@@ -1300,12 +1373,24 @@ wss.on("connection", (ws) => {
       const username = verifyToken(String(frame.token));
       if (username) {
         ws.username = username;
+        const first = !userHasConnections(username);
         if (!wsClients.has(ws.username)) wsClients.set(ws.username, new Set());
         wsClients.get(ws.username).add(ws);
         ws.send(JSON.stringify({ type: "auth_ok", username: ws.username }));
+        // P2：#27 上线广播：本账号首个连接上线时通知好友，并下发好友在线清单
+        if (first) broadcastPresence(username, true);
+        sendPresenceMap(ws, username);
         console.log(`[ws] ${ws.username} 已认证（在线 ${wss.clients.size} 连接）`);
       } else {
         ws.send(JSON.stringify({ type: "auth_fail", message: "登录已过期，请重新登录" }));
+      }
+    } else if (frame && frame.type === "typing" && ws.username) {
+      // P2：#27 输入中：只转发给会话对方（前端已做 2s 节流）
+      const d = frame.data || {};
+      const convId = String(d.convId || "");
+      const peer = peerOf(convId, ws.username);
+      if (peer) {
+        pushToPeer(peer, { type: "typing", data: { convId, from: ws.username } });
       }
     }
   });
@@ -1315,7 +1400,10 @@ wss.on("connection", (ws) => {
       const conns = wsClients.get(ws.username);
       if (conns) {
         conns.delete(ws);
-        if (!conns.size) wsClients.delete(ws.username);
+        if (!conns.size) {
+          wsClients.delete(ws.username);
+          broadcastPresence(ws.username, false); // P2：#27 全部连接断开 → 通知好友离线
+        }
       }
     }
     console.log(`[ws] client disconnected (online: ${wss.clients.size})`);
@@ -1332,7 +1420,10 @@ setInterval(() => {
         const conns = wsClients.get(ws.username);
         if (conns) {
           conns.delete(ws);
-          if (!conns.size) wsClients.delete(ws.username);
+          if (!conns.size) {
+            wsClients.delete(ws.username);
+            broadcastPresence(ws.username, false);
+          }
         }
       }
       ws.terminate();

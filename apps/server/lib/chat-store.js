@@ -246,12 +246,36 @@ function convMembersOf(convIdValue) {
 export function getMessages(convIdValue, me) {
   const members = convMembersOf(convIdValue);
   if (!members || !members.includes(me)) return null;
-  if (!existsSync(metaFile(convIdValue))) return { messages: [], peerLastRead: 0, peer: members.find((m) => m !== me) };
+  if (!existsSync(metaFile(convIdValue))) return { messages: [], peerLastRead: 0, peer: members.find((m) => m !== me), hasMore: false };
   const meta = readMeta(convIdValue) || {};
   const peer = members.find((m) => m !== me);
   const peerLastRead = (meta.lastReadAt && meta.lastReadAt[peer]) || 0;
-  return { messages: getAllMessages(convIdValue), peerLastRead, peer };
+  return { messages: getAllMessages(convIdValue), peerLastRead, peer, hasMore: false };
 }
+
+/** 分页加载历史消息（P2：#26）：返回 ts < beforeTs 的最近 limit 条；hasMore 表示还有更早的消息 */
+export function getMessagesBefore(convIdValue, me, beforeTs, limit = 50) {
+  const members = convMembersOf(convIdValue);
+  if (!members || !members.includes(me)) return null;
+  if (!existsSync(metaFile(convIdValue))) {
+    return { messages: [], peerLastRead: 0, peer: members.find((m) => m !== me), hasMore: false };
+  }
+  const meta = readMeta(convIdValue) || {};
+  const peer = members.find((m) => m !== me);
+  const peerLastRead = (meta.lastReadAt && meta.lastReadAt[peer]) || 0;
+  const all = getAllMessages(convIdValue);
+  const idx = all.findIndex((m) => m.ts >= beforeTs); // 第一个 >= beforeTs 的消息
+  const cut = idx === -1 ? all.length : idx;
+  const older = all.slice(0, cut); // 全部早于 beforeTs 的消息（升序）
+  return {
+    messages: older.slice(-limit),
+    peerLastRead,
+    peer,
+    hasMore: older.length > limit,
+  };
+}
+
+/** 已读：把我在该会话的未读计数清零，并记录本次已读时间（已读回执用） */
 
 /** 发消息：消息带唯一 id（供撤回/已读/客户端缓存去重），追加到最后一片（满 500 开新片） */
 export function addMessage(convIdValue, from, text, file) {

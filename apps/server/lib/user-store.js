@@ -13,7 +13,7 @@
  */
 import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync, renameSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadJsonOrThrow, saveJson } from "./json-file.js";
 
@@ -203,4 +203,47 @@ export async function changePassword(username, oldPassword, newPassword) {
     ok: true,
     data: { username, displayName: record.displayName || username, avatar: record.avatar || null },
   };
+}
+
+/**
+ * 更新个人资料（昵称 / 头像，P2：#22）。
+ * displayName / avatarData 均可选：只传需要改的字段。
+ * 旧头像文件清理：仅当新头像成功保存且旧头像不是同一个文件时才删除。
+ */
+export function updateProfile(username, displayName, avatarData) {
+  const users = loadUsers();
+  const record = users[username];
+  if (!record) {
+    return { ok: false, error: { code: "NOT_FOUND", message: "账号不存在" } };
+  }
+
+  let name = record.displayName || username;
+  if (displayName !== undefined && displayName !== null) {
+    const n = String(displayName).trim();
+    if (!n || !DISPLAY_NAME_RE.test(n)) {
+      return { ok: false, error: { code: "INVALID_DISPLAY_NAME", message: "名字需为 1-32 个字符（不含空格）" } };
+    }
+    name = n;
+  }
+
+  let avatar = record.avatar || null;
+  if (avatarData !== undefined && avatarData !== null) {
+    const oldAvatar = record.avatar || null;
+    const saved = saveAvatar(username, avatarData);
+    if (!saved) {
+      return { ok: false, error: { code: "INVALID_AVATAR", message: "头像格式不支持或超过 300KB（支持 png/jpeg/gif/webp）" } };
+    }
+    avatar = saved;
+    // 清理旧头像文件（不同文件名才删）
+    if (oldAvatar && oldAvatar !== saved) {
+      const oldFile = join(AVATARS_DIR, basename(oldAvatar));
+      try { if (existsSync(oldFile)) rmSync(oldFile, { force: true }); } catch { /* 忽略 */ }
+    }
+  }
+
+  record.displayName = name;
+  record.avatar = avatar;
+  saveJson(USERS_FILE, users, "users.json");
+  console.log(`[users] 资料更新: ${username} (displayName=${name}, avatar=${avatar ? "yes" : "no"})`);
+  return { ok: true, data: { username, displayName: name, avatar } };
 }

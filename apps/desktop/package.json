@@ -1,6 +1,6 @@
 {
   "name": "magichub-client-app",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MagicHub-Client：纯前端客户端（H5 页面壳），业务由独立 MagicHub-Server 提供",
   "main": "main.js",
   "author": "MagicHub Team",

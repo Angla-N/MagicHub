@@ -237,6 +237,8 @@
           <span id="emptyText">还没有好友会话<br>去「通讯录」添加好友后即可聊天</span>
         </div>
       </div>
+      <!-- P2：#27 对方正在输入提示（输入栏上方） -->
+      <div class="typing-hint" id="typingHint" hidden></div>
       <div class="input-bar" id="inputBar" style="display:none">
         <div class="input-tools">
           <button class="attach-btn" id="attachBtn" title="发送图片或文件"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -279,7 +281,15 @@
       <div class="settings-body">
         <div class="set-card">
           <h4 class="set-card-title">账号信息</h4>
-          <div class="set-row"><span class="set-label">名字</span><span class="set-val" id="setName"></span></div>
+          <div class="set-row"><span class="set-label">头像</span>
+            <span class="set-avatar" id="setAvatarWrap"></span>
+            <button class="set-btn" id="setAvatarBtn">更换头像</button>
+            <input type="file" id="setAvatarInput" accept="image/*" hidden>
+          </div>
+          <div class="set-row"><span class="set-label">名字</span>
+            <input class="input" id="setNameInput" maxlength="32" placeholder="输入新的名字" style="flex:1;min-width:120px">
+            <button class="set-btn primary" id="setProfileSave">保存资料</button>
+          </div>
           <div class="set-row"><span class="set-label">账号</span><span class="set-val mono" id="setUsername"></span></div>
           <div class="set-row"><span class="set-label">密码</span><span class="set-val mono" id="setPassword">••••••••</span>
             <button class="set-btn" id="setPwdBtn">修改密码</button></div>
@@ -575,9 +585,10 @@
     viewTitle.textContent = "设置";
     setListPane(false);
     // 填充账号信息与服务器地址
-    $("setName").textContent = session.displayName || session.username;
+    $("setNameInput").value = session.displayName || session.username;
     $("setUsername").textContent = session.username;
     $("setServer").textContent = BASE;
+    renderSetAvatar();
     loadServerStats();
     // 后台驻留开关（仅桌面端）
     var keepRow = $("keepRow");
@@ -599,10 +610,40 @@
       var row = document.createElement("div");
       row.className = "set-plugin";
       var icon = pluginIconUrl(p);
+      var enabled = p.enabled !== false;
       row.innerHTML = (icon ? '<img src="' + icon + '" alt="">' : '<span class="set-plugin-letter">' + p.name.charAt(0) + '</span>') +
-        '<div class="set-plugin-meta"><b>' + p.name + '</b><span>' + (p.description || "MagicHub 插件") + '</span></div>' +
-        '<span class="set-plugin-on">已启用</span>';
+        '<div class="set-plugin-meta"><b>' + p.name + '</b><span>' + (p.description || "MagicHub 插件") + ' · v' + (p.version || "-") + '</span></div>' +
+        (window.magicHub && window.magicHub.setPluginEnabled
+          ? '<label class="switch" data-id="' + p.id + '"><input type="checkbox" data-enable="' + p.id + '"' + (enabled ? " checked" : "") + '><span class="slider"></span></label>'
+          : '<span class="set-plugin-on">已启用</span>') +
+        (window.magicHub && window.magicHub.uninstallPlugin
+          ? '<button class="set-btn danger" data-uninstall="' + p.id + '" title="卸载插件（删除目录）">卸载</button>'
+          : "");
       box.appendChild(row);
+    });
+    // 启停开关：停用后侧栏入口立即消失；启用后恢复
+    Array.prototype.forEach.call(box.querySelectorAll('[data-enable]'), function (cb) {
+      cb.addEventListener("change", function () {
+        var id = this.getAttribute("data-enable");
+        window.magicHub.setPluginEnabled(id, this.checked).then(function (ok) {
+          if (!ok) { toast("切换失败"); return; }
+          toast(this.checked ? "插件已启用" : "插件已停用（数据保留，可随时恢复）");
+          return window.magicHub.listLocalPlugins();
+        }.bind(this)).then(function (list) {
+          if (list) {
+            localPlugins = list || [];
+            renderPluginRail();
+            showSettings(); // 重渲染设置页插件列表
+          }
+        }).catch(function () {});
+      });
+    });
+    // 卸载按钮
+    Array.prototype.forEach.call(box.querySelectorAll('[data-uninstall]'), function (btn) {
+      btn.addEventListener("click", function () {
+        var id = this.getAttribute("data-uninstall");
+        uninstallPlugin(id).then(function () { showSettings(); });
+      });
     });
   }
   /* P1：#19 服务器存储占用（设置页展示） */
@@ -626,6 +667,66 @@
         toast(this.checked ? "已开启后台驻留：关闭窗口时最小化到托盘" : "已关闭后台驻留：关闭窗口将退出程序");
       }.bind(this));
     }
+  });
+
+  /* P2：#22 资料编辑：头像预览 + 昵称/头像保存 */
+  var pendingAvatar = null; // 待保存的新头像 dataURL
+  function renderSetAvatar() {
+    var wrap = $("setAvatarWrap");
+    wrap.innerHTML = "";
+    if (session.avatar) {
+      var img = document.createElement("img");
+      img.src = BASE + session.avatar;
+      img.alt = "我的头像";
+      img.onerror = function () { wrap.textContent = (session.displayName || session.username).charAt(0).toUpperCase(); };
+      wrap.appendChild(img);
+    } else {
+      wrap.textContent = (session.displayName || session.username).charAt(0).toUpperCase();
+    }
+  }
+  $("setAvatarBtn").addEventListener("click", function () { $("setAvatarInput").click(); });
+  $("setAvatarInput").addEventListener("change", function () {
+    if (!this.files || !this.files[0]) return;
+    var file = this.files[0];
+    if (file.size > 300 * 1024) { toast("头像不能超过 300KB"); this.value = ""; return; }
+    var fr = new FileReader();
+    fr.onload = function () {
+      pendingAvatar = fr.result;
+      var wrap = $("setAvatarWrap");
+      wrap.innerHTML = "";
+      var img = document.createElement("img");
+      img.src = pendingAvatar;
+      wrap.appendChild(img);
+      toast("头像已选择，点击「保存资料」生效");
+    };
+    fr.readAsDataURL(file);
+    this.value = "";
+  });
+  $("setProfileSave").addEventListener("click", function () {
+    var name = $("setNameInput").value.trim();
+    var body = {};
+    if (name && name !== (session.displayName || session.username)) body.displayName = name;
+    if (pendingAvatar) body.avatar = pendingAvatar;
+    if (!body.displayName && !body.avatar) { toast("没有需要保存的修改"); return; }
+    var btn = this;
+    btn.disabled = true;
+    api(BASE + "/api/account/profile", {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify(body),
+    }).then(function (d) {
+      btn.disabled = false;
+      if (!d.ok) { toast((d.error && d.error.message) || "保存失败"); return; }
+      var u = d.data;
+      session.displayName = u.displayName;
+      session.avatar = u.avatar;
+      try { localStorage.setItem("magichub_session", JSON.stringify(session)); } catch (e) {}
+      pendingAvatar = null;
+      renderAvatar();
+      renderSetAvatar();
+      loadConvs(); // 会话栏名字/头像即时刷新
+      toast("资料已更新");
+    }).catch(function () { btn.disabled = false; toast("保存失败，请检查后端服务"); });
   });
   function showPlugin(id, meta) {
     hideAllViews();
@@ -676,7 +777,7 @@
     var rail = $("pluginRail");
     rail.innerHTML = "";
     pluginEntries = {};
-    var list = localPlugins.slice();
+    var list = localPlugins.filter(function (p) { return p.enabled !== false; }); // P2：#24 侧栏只显示启用插件
     // 浏览器模式（无桌面 IPC）：回退显示服务器公开插件
     if (!window.magicHub || !window.magicHub.listLocalPlugins) {
       list = marketPlugins.filter(function (p) { return p.public !== false; });
@@ -739,6 +840,16 @@
     localPlugins.forEach(function (p) { s[p.id] = p; });
     return s;
   }
+  /* P2：#23 插件版本比较（semver 数字段逐级比较；无法解析时按字符串比较） */
+  function versionCmp(a, b) {
+    var pa = String(a || "").split(".").map(function (x) { return parseInt(x, 10) || 0; });
+    var pb = String(b || "").split(".").map(function (x) { return parseInt(x, 10) || 0; });
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var va = pa[i] || 0, vb = pb[i] || 0;
+      if (va !== vb) return va - vb;
+    }
+    return 0;
+  }
   var mktTab = "all"; // all | mine
 
   /** 市场去重合并：服务器市场项 + 本地已装项 */
@@ -791,7 +902,12 @@
       var actions = "";
       var badge = "";
       if (isLocal) {
-        badge = '<span class="mkt-badge inst">已安装</span>';
+        // P2：#23 本地已装且市场版本更高 → 显示"更新"（覆盖安装，不重复计数）
+        var hasUpdate = p.version && lp.version && versionCmp(p.version, lp.version) > 0;
+        badge = '<span class="mkt-badge inst">' + (hasUpdate ? "可更新" : "已安装") + '</span>';
+        actions += hasUpdate
+          ? '<button class="mkt-btn primary" data-act="update" data-id="' + id + '">更新</button>'
+          : "";
         actions += '<button class="mkt-btn danger" data-act="uninstall" data-id="' + id + '">卸载</button>';
       } else {
         badge = p.public === false ? '<span class="mkt-badge priv">未公开</span>' : '<span class="mkt-badge pub">公开</span>';
@@ -915,6 +1031,7 @@
     var act = btn.getAttribute("data-act"), id = btn.getAttribute("data-id");
     var p = marketPlugins.find(function (x) { return x.id === id; }) || {};
     if (act === "install") installPlugin(p);
+    else if (act === "update") installPlugin(p); // P2：#23 更新 = 下载新版覆盖安装
     else if (act === "uninstall") uninstallPlugin(id);
     else if (act === "delete") {
       if (!confirm("确定删除插件「" + (p.name || id) + "」？服务器与市场中的该插件都会被删除。")) return;
@@ -1081,7 +1198,9 @@
         ? (c.last.from === session.username ? "我：" : "") + previewText(c.last)
         : "你们已成为好友，开始聊天吧";
       var badgeHtml = c.unread > 0 ? '<span class="badge">' + (c.unread > 99 ? "99+" : c.unread) + '</span>' : "";
-      el.innerHTML = '<span class="av-wrap">' + avatarHTML(c.peer) + badgeHtml + '</span>' +
+      // P2：#27 在线状态点（会话列表头像右下）
+      var od = onlineUsers[c.peer.username] ? '<i class="online-dot"></i>' : "";
+      el.innerHTML = '<span class="av-wrap">' + avatarHTML(c.peer) + od + badgeHtml + '</span>' +
         '<div class="c-main"><div class="c-row"><span class="c-name">' + (c.peer.displayName || c.peer.username) + '</span>' +
         '<span class="c-time">' + fmtTime(c.last && c.last.ts) + '</span></div>' +
         '<div class="c-prev"></div></div>';
@@ -1115,6 +1234,55 @@
         renderConvs();
       })
       .catch(function () { /* 后端未启动 */ });
+  }
+
+  /* ===== P2：#27 在线状态 + 输入中 ===== */
+  var onlineUsers = {}; // username -> true（好友在线清单）
+  var typingTimer = null;
+  var lastTypingSent = 0;
+
+  /** 聊天头部状态点：当前会话对方在线 → 绿点，离线 → 灰点 */
+  function updateChatHeadPresence() {
+    var dot = document.querySelector(".chat-head .dot");
+    if (!dot) return;
+    var peerName = "";
+    if (activeConv && convMeta[activeConv] && convMeta[activeConv].peer) {
+      peerName = convMeta[activeConv].peer.username;
+    }
+    dot.className = "dot " + (peerName && onlineUsers[peerName] ? "online" : "offline");
+  }
+  /** 收到 presence / presence_map 后统一刷新状态 UI */
+  function renderPresence() {
+    updateChatHeadPresence();
+    renderConvs(); // 会话列表在线点
+  }
+  /** 对方正在输入提示（2.5s 后自动消失） */
+  function showTyping(from) {
+    var hint = $("typingHint");
+    if (!hint) return;
+    var name = "";
+    if (convMeta[activeConv] && convMeta[activeConv].peer) {
+      name = convMeta[activeConv].peer.displayName || convMeta[activeConv].peer.username;
+    }
+    hint.innerHTML = '<span class="typing"><i></i><i></i><i></i></span> ' + escapeHtml(name || from) + " 正在输入…";
+    hint.hidden = false;
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(function () { hint.hidden = true; }, 2500);
+  }
+  // 输入框 input：节流 2s 通知对方"正在输入"
+  $("input").addEventListener("input", function () {
+    if (!activeConv || !ws || ws.readyState !== WebSocket.OPEN) return;
+    var now = Date.now();
+    if (now - lastTypingSent > 2000) {
+      lastTypingSent = now;
+      ws.send(JSON.stringify({ type: "typing", data: { convId: activeConv } }));
+    }
+  });
+  // 打开/关闭会话时隐藏"正在输入"
+  function hideTyping() {
+    clearTimeout(typingTimer);
+    var hint = $("typingHint");
+    if (hint) hint.hidden = true;
   }
 
   $("convSearch").addEventListener("input", function () {
@@ -1180,13 +1348,58 @@
   function closeConv() {
     activeConv = null;
     setChatChrome(false);
-    $("msgArea").querySelectorAll(".msg").forEach(function (el) { el.remove(); });
+    $("msgArea").querySelectorAll(".msg,.msg-date").forEach(function (el) { el.remove(); });
     $("emptyTip").style.display = "none";
+    hideTyping();
+    // P2：#26 重置会话消息内存状态
+    convMsgs = [];
+    convHasMore = false;
+    convLoadingMore = false;
+    convOldestTs = 0;
+    msgGroupCtx = null;
+  }
+
+  /* P2：#26 当前会话消息内存状态：滚动分页加载（顶部加载更早） */
+  var convMsgs = [];
+  var convHasMore = false;
+  var convLoadingMore = false;
+  var convOldestTs = 0;
+
+  /** 加载更早的历史消息（滚动到顶部触发） */
+  function loadEarlier() {
+    if (!activeConv || convLoadingMore || !convHasMore || !convOldestTs) return;
+    convLoadingMore = true;
+    var area = $("msgArea");
+    var prevH = area.scrollHeight;
+    var prevTop = area.scrollTop;
+    api(BASE + "/api/messages?conv=" + encodeURIComponent(activeConv) + "&before=" + convOldestTs, { headers: authHeaders() })
+      .then(function (data) {
+        convLoadingMore = false;
+        if (!data.ok || !data.data) return;
+        var older = data.data.messages || [];
+        if (!older.length) { convHasMore = false; return; }
+        convMsgs = older.concat(convMsgs);
+        convHasMore = !!data.data.hasMore;
+        convOldestTs = older.length ? older[0].ts : convOldestTs;
+        // 整体重渲染（分组状态重置，保证顶部日期/时间正确）
+        area.querySelectorAll(".msg,.msg-date").forEach(function (el) { el.remove(); });
+        msgGroupCtx = null;
+        convMsgs.forEach(function (m) { appendMsg(m, m.from === session.username); });
+        // 保持原滚动位置（新内容插在顶部）
+        area.scrollTop = area.scrollHeight - prevH + prevTop;
+      })
+      .catch(function () { convLoadingMore = false; });
+  }
+  function bindScrollLoad(area) {
+    area.onscroll = function () {
+      if (area.scrollTop < 48) loadEarlier();
+    };
   }
 
   /* ===== 打开会话：标记已读 + 加载历史 + 可发送 ===== */
   function openConv(convId) {
     activeConv = convId;
+    hideTyping();
     setChatChrome(true);
     Array.prototype.forEach.call(chatList.children, function (el) {
       el.classList.toggle("on", el.getAttribute("data-conv") === convId);
@@ -1195,6 +1408,7 @@
     if (meta) {
       $("chatName").textContent = meta.peer.displayName || meta.peer.username;
       $("peerAv").innerHTML = avatarHTML(meta.peer);
+      updateChatHeadPresence();
       // 标记已读：清零未读角标
       if (meta.unread > 0) {
         meta.unread = 0;
@@ -1210,8 +1424,14 @@
     var area = $("msgArea");
     var empty = $("emptyTip");
     // 只清历史消息气泡，保留 emptyTip 占位节点（后续渲染依赖它）
-    area.querySelectorAll(".msg").forEach(function (el) { el.remove(); });
+    area.querySelectorAll(".msg,.msg-date").forEach(function (el) { el.remove(); });
     empty.style.display = "none";
+    // P2：#26 重置分组与分页状态
+    msgGroupCtx = null;
+    convMsgs = [];
+    convHasMore = false;
+    convLoadingMore = false;
+    convOldestTs = 0;
 
     // 先渲染本地缓存（前端本地保存最近记录，弱网/离线也能立即看到）
     var cached = readMsgCache(convId);
@@ -1228,9 +1448,13 @@
           return;
         }
         var msgs = data.data.messages || [];
+        convMsgs = msgs.slice();
+        convHasMore = !!data.data.hasMore;
+        convOldestTs = msgs.length ? msgs[0].ts : 0;
         writeMsgCache(convId, msgs);
         // 用服务器最新记录替换缓存气泡，避免重复
-        area.querySelectorAll(".msg").forEach(function (el) { el.remove(); });
+        area.querySelectorAll(".msg,.msg-date").forEach(function (el) { el.remove(); });
+        msgGroupCtx = null;
         if (msgs.length === 0) {
           empty.style.display = "";
           $("emptyText").textContent = "你们已成为好友，发一条消息打个招呼吧";
@@ -1251,6 +1475,7 @@
           area.appendChild(rt);
         }
         area.scrollTop = area.scrollHeight;
+        bindScrollLoad(area);
       })
       .catch(function () { if (!cached.length) empty.style.display = ""; });
 
@@ -1270,9 +1495,32 @@
     catch (e) { /* 容量不足时忽略 */ }
   }
 
+  /* P2：#26 消息分组状态：msgGroupCtx.date 当前渲染的日期串、ts 上一条消息时间 */
+  var msgGroupCtx = null;
+
   function appendMsg(m, mine) {
     var area = $("msgArea");
     $("emptyTip").style.display = "none";
+    // P2：#26 分组时间：同一天且距上一条 <= 5 分钟 → 时间隐藏；跨天插入日期分隔芯片
+    var showTime = true;
+    if (msgGroupCtx) {
+      var d = new Date(m.ts);
+      var dayKey = d.toDateString();
+      if (msgGroupCtx.date !== dayKey) {
+        if (msgGroupCtx.date !== null) {
+          var sep = document.createElement("div");
+          sep.className = "msg-date";
+          sep.textContent = fmtDay(m.ts);
+          area.appendChild(sep);
+        }
+        msgGroupCtx.date = dayKey;
+        msgGroupCtx.ts = m.ts;
+      } else if (m.ts - msgGroupCtx.ts > 5 * 60 * 1000) {
+        msgGroupCtx.ts = m.ts;
+      } else {
+        showTime = false;
+      }
+    }
     var div = document.createElement("div");
     div.className = "msg " + (mine ? "out" : "in");
     if (m.id) div.setAttribute("data-msgid", String(m.id));
@@ -1302,12 +1550,7 @@
       bubble.className = "bubble";
       bubble.textContent = m.text;
     }
-    div.appendChild(bubble);
-    var time = document.createElement("div");
-    time.className = "msg-time";
-    time.textContent = fmtTime(m.ts);
-    div.appendChild(time);
-    // P1：#18 撤回按钮：仅自己发送且未撤回的消息显示（hover 可见）
+    // P1：#18 撤回按钮：仅自己发送且未撤回的消息显示（hover 可见，挂气泡右下角）
     if (mine && !m.deleted && m.id) {
       var rec = document.createElement("button");
       rec.type = "button";
@@ -1315,12 +1558,26 @@
       rec.textContent = "撤回";
       rec.title = "撤回这条消息";
       rec.addEventListener("click", function () { recallMsg(m.id); });
-      time.appendChild(rec);
+      bubble.appendChild(rec);
     }
+    div.appendChild(bubble);
+    var time = document.createElement("div");
+    time.className = "msg-time" + (showTime ? "" : " hide");
+    time.textContent = showTime ? fmtTime(m.ts) : "";
+    div.appendChild(time);
     area.appendChild(div);
     area.scrollTop = area.scrollHeight;
     // 消息搜索激活时对新消息同步过滤
     if (msgSearchInput && msgSearchInput.value.trim()) applyMsgSearch();
+  }
+  /** 日期分隔文案（跨天） */
+  function fmtDay(ts) {
+    var d = new Date(ts), now = new Date();
+    if (d.toDateString() === now.toDateString()) return "今天";
+    var yest = new Date(now); yest.setDate(now.getDate() - 1);
+    if (d.toDateString() === yest.toDateString()) return "昨天";
+    if (d.getFullYear() === now.getFullYear()) return (d.getMonth() + 1) + "月" + d.getDate() + "日";
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
   }
 
   /* P1：#18 撤回自己发送的消息 */
@@ -1349,6 +1606,10 @@
       if (String(m.id || "") === String(msgId || "")) { m.deleted = true; changed = true; }
     });
     if (changed) writeMsgCache(convId, cache);
+    // P2：#26 同步内存会话数组（滚动分页重渲染时保持一致）
+    convMsgs.forEach(function (m) {
+      if (String(m.id || "") === String(msgId || "")) m.deleted = true;
+    });
     Array.prototype.forEach.call($("msgArea").querySelectorAll('.msg[data-msgid="' + String(msgId) + '"]'), function (el) {
       var bubble = el.querySelector(".bubble");
       if (!bubble || bubble.classList.contains("recalled")) return;
@@ -1776,6 +2037,9 @@
         var d = frame.data || {};
         if (activeConv && d.convId === activeConv) {
           appendMsg(d.msg, false);
+          // P2：#26 同步内存数组（滚动分页重渲染保持一致）
+          convMsgs.push(d.msg);
+          if (!convOldestTs) convOldestTs = d.msg.ts;
           // 正在看该会话：服务端计数置 0（若对方刚发来）
           if (convMeta[d.convId] && convMeta[d.convId].unread > 0) {
             convMeta[d.convId].unread = 0;
@@ -1812,6 +2076,24 @@
         var r = frame.data || {};
         recallLocal(r.convId, r.msgId);
         loadConvs();
+      } else if (frame.type === "presence_map") {
+        // P2：#27 连接建立后下发的好友在线清单
+        var pm = frame.data || {};
+        onlineUsers = {};
+        (pm.online || []).forEach(function (u) { onlineUsers[u] = true; });
+        renderPresence();
+      } else if (frame.type === "presence") {
+        // P2：#27 好友上线/离线广播
+        var pr = frame.data || {};
+        if (pr.online) onlineUsers[pr.username] = true;
+        else delete onlineUsers[pr.username];
+        renderPresence();
+      } else if (frame.type === "typing") {
+        // P2：#27 对方正在输入（仅当前会话显示）
+        var tp = frame.data || {};
+        if (activeConv && tp.convId === activeConv && tp.from !== session.username) {
+          showTyping(tp.from);
+        }
       }
     };
     ws.onclose = function () {

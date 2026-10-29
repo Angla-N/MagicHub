@@ -1,6 +1,6 @@
 {
   "name": "magichub-server-app",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MagicHub-Server：独立业务服务器（账号/聊天记录/文件/插件/WS 推送），无窗口托盘常驻",
   "main": "main.js",
   "author": "MagicHub Team",

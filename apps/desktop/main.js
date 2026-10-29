@@ -24,14 +24,24 @@ let quitting = false;
 /* ---- 便携本地数据：exe 目录/data（插件下载到本地，不占用 C 盘用户目录） ---- */
 const localDataDir = path.join(path.dirname(process.execPath), "data");
 const localPluginsDir = path.join(localDataDir, "plugins");
-const settingsFile = path.join(app.getPath("userData"), "settings.json");
+// P2：#25 设置文件移到 exe 旁 data/settings.json（与插件同目录，不占 C 盘）
+const settingsFile = path.join(localDataDir, "settings.json");
+const legacySettingsFile = path.join(app.getPath("userData"), "settings.json");
 const sevenZip = app.isPackaged
   ? path.join(process.resourcesPath, "7za.exe")
   : path.join(__dirname, "7za.exe");
 
-/* ---- 设置读写（后台驻留开关） ---- */
+/* ---- 设置读写（后台驻留开关；P2：#25 首次启动把旧的 C 盘设置迁移到 exe 旁） ---- */
 function readSettings() {
   try {
+    if (fs.existsSync(legacySettingsFile) && !fs.existsSync(settingsFile)) {
+      // 旧版设置（C 盘 userData）迁移：复制内容后删除旧文件
+      const old = JSON.parse(fs.readFileSync(legacySettingsFile, "utf8"));
+      fs.mkdirSync(localDataDir, { recursive: true });
+      fs.writeFileSync(settingsFile, JSON.stringify(old, null, 2));
+      try { fs.rmSync(legacySettingsFile, { force: true }); } catch { /* 忽略 */ }
+      return old;
+    }
     if (fs.existsSync(settingsFile)) return JSON.parse(fs.readFileSync(settingsFile, "utf8"));
   } catch { /* 忽略 */ }
   return {};
@@ -88,6 +98,8 @@ function listLocalPlugins() {
       const m = JSON.parse(fs.readFileSync(mf, "utf8"));
       const entry = safePluginEntry(dir, m.entry || "index.html");
       if (!entry) { console.error(`[magichub-client] 跳过插件 ${name}：入口路径不合法`); continue; }
+      // P2：#24 启用/禁用：目录下存在 .disabled 标记视为停用（不删除，随时可恢复）
+      const enabled = !fs.existsSync(path.join(dir, ".disabled"));
       out.push({
         id: String(m.id || name),
         name: m.name || name,
@@ -95,12 +107,27 @@ function listLocalPlugins() {
         description: m.description || "",
         entry: m.entry || "index.html",
         icon: m.icon || "",
+        enabled,
         localEntry: "file:///" + entry.replace(/\\/g, "/"),
         installedAt: fs.statSync(dir).mtimeMs,
       });
     } catch { /* 跳过损坏的本地插件 */ }
   }
   return out;
+}
+
+/** P2：#24 设置插件启用状态：停用写入 .disabled 标记文件，启用删除标记 */
+function setPluginEnabled(id, enabled) {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(String(id))) return false;
+  const dir = path.join(localPluginsDir, String(id));
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return false;
+  const mark = path.join(dir, ".disabled");
+  if (enabled) {
+    try { if (fs.existsSync(mark)) fs.rmSync(mark, { force: true }); } catch { return false; }
+  } else {
+    try { fs.writeFileSync(mark, ""); } catch { return false; }
+  }
+  return true;
 }
 
 /** 解压 .7z 安装包到本地插件目录（校验 manifest + 入口防穿越 + 解压规模限制） */
@@ -238,6 +265,7 @@ ipcMain.handle("settings:setKeepInBackground", (_e, val) => {
 });
 
 ipcMain.handle("plugins:listLocal", () => listLocalPlugins());
+ipcMain.handle("plugins:setEnabled", (_e, id, enabled) => setPluginEnabled(id, !!enabled));
 ipcMain.handle("plugins:install", async (_e, payload) => {
   const id = String((payload && payload.id) || "");
   const buffer = payload && payload.buffer;
