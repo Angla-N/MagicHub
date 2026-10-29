@@ -1,0 +1,160 @@
+/* ============================================================
+   MagicHub · main.css —— 主界面（index.html）页面专属样式
+   窗口化布局 / 设置视图 / 插件市场 / 通讯录 / 全局搜索
+   依赖 theme.css 与 chat.css 中的通用样式
+   ============================================================ */
+
+/* —— 页面专属：窗口化主界面布局 —— */
+body{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.app-shell{height:calc(100vh - 46px);border-radius:0;border:none;box-shadow:none}
+
+/* 头像：方形圆角（非圆形） */
+.rail-avatar{width:38px;height:38px;border-radius:10px;background:var(--grad);color:#fff;font-weight:800;font-size:15px;
+  margin-bottom:14px;display:grid;place-items:center;box-shadow:0 4px 14px rgba(124,58,237,.45);overflow:hidden}
+.rail-avatar img{width:100%;height:100%;object-fit:cover}
+.rail-plugins{display:flex;flex-direction:column;align-items:center;gap:6px}
+.rail-plugins .rail-item img{width:20px;height:20px;border-radius:5px}
+
+/* 会话列表：仅聊天视图显示；其余视图内容占满整个主区域 */
+body:not(.chat-mode) .list-pane{display:none!important}
+@media(min-width:820px){body.chat-mode .list-pane{display:flex}}
+@media(max-width:819px){.list-pane{display:none!important}}
+
+/* 插件视图：占满聊天区剩余空间 */
+.plugin-view{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg-soft);flex:1}
+.plugin-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border)}
+.plugin-head h4{font-size:14px;font-weight:700}
+.plugin-frame{flex:1;min-height:0;border:none;background:var(--bg)}
+
+/* 占位视图（设置 演示） */
+.ph-view{display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;min-width:0;flex:1}
+.ph-view svg{opacity:.6}
+
+/* —— 设置视图：账号信息 + 已启用插件 —— */
+.settings-view{display:none;flex-direction:column;min-width:0;min-height:0;background:var(--bg-soft);flex:1;overflow:hidden}
+.settings-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none}
+.settings-body{flex:1;min-height:0;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.set-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+.set-card-title{font-size:13px;font-weight:800;color:var(--accent-soft);margin:0 0 12px;letter-spacing:.5px}
+.set-row{display:flex;align-items:center;gap:14px;padding:9px 0;font-size:13px;border-bottom:1px dashed var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-label{flex:none;width:76px;color:var(--text-3)}
+.set-val{flex:1;color:var(--text-1);word-break:break-all}
+.set-val.mono{font-family:Consolas,Menlo,monospace;font-size:12px}
+.set-btn{flex:none;padding:6px 14px;border-radius:9px;background:rgba(124,58,237,.16);border:1px solid rgba(124,58,237,.45);
+  color:var(--accent-soft);font-size:12px;cursor:pointer;transition:background .2s}
+.set-btn:hover{background:rgba(124,58,237,.3)}
+.set-plugins{display:flex;flex-direction:column;gap:10px}
+.set-plugin{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg-soft);
+  border:1px solid var(--border);border-radius:12px}
+.set-plugin img{width:26px;height:26px;border-radius:7px;flex:none}
+.set-plugin-letter{width:26px;height:26px;border-radius:7px;background:var(--grad);color:#fff;font-weight:800;
+  font-size:13px;display:grid;place-items:center;flex:none}
+.set-plugin-meta{flex:1;min-width:0}
+.set-plugin-meta b{display:block;font-size:13px;color:var(--text-1)}
+.set-plugin-meta span{display:block;font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.set-plugin-on{flex:none;font-size:11px;color:#6ee7b7;background:rgba(52,211,153,.12);
+  border:1px solid rgba(52,211,153,.3);border-radius:999px;padding:3px 10px}
+.set-empty{font-size:12px;color:var(--text-3);padding:8px 0}
+.pwd-field{margin-bottom:12px;width:100%}
+.pwd-field label{display:block;font-size:11px;color:var(--text-3);margin-bottom:6px}
+.pwd-field .input{width:100%;padding:9px 12px;border-radius:9px;border:1px solid var(--border);
+  background:var(--bg-soft);color:var(--text-1);font-size:13px;box-sizing:border-box}
+.pwd-field .input:focus{outline:none;border-color:rgba(167,139,250,.55);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
+.pwd-err{width:100%;min-height:18px;font-size:12px;color:#fb7185;margin-bottom:6px}
+/* 开关（后台驻留） */
+.switch{position:relative;display:inline-block;width:40px;height:22px;flex:none;cursor:pointer}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;inset:0;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:999px;transition:.2s}
+.switch .slider:before{content:"";position:absolute;width:16px;height:16px;border-radius:50%;left:2px;top:2px;
+  background:#9ca3af;transition:.2s}
+.switch input:checked + .slider{background:rgba(124,58,237,.35);border-color:rgba(167,139,250,.6)}
+.switch input:checked + .slider:before{transform:translateX(18px);background:var(--grad)}
+
+/* —— 插件市场视图 —— */
+.market-view{display:none;flex-direction:column;min-width:0;min-height:0;background:var(--bg-soft);flex:1}
+.market-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none;
+  display:flex;align-items:center}
+.market-head .tools{margin-left:auto;display:flex;gap:8px;align-items:center}
+/* 统计条 */
+.market-stats{display:flex;align-items:center;gap:10px;padding:12px 20px 0;flex:none;flex-wrap:wrap}
+.mstat{display:flex;align-items:baseline;gap:6px;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:8px 14px}
+.mstat b{font-size:18px;color:var(--accent-soft);font-weight:800}
+.mstat span{font-size:12px;color:var(--text-3)}
+.mstat-tabs{margin-left:auto;display:flex;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:3px;gap:2px}
+.mstat-tab{border:none;background:transparent;color:var(--text-3);font-size:12px;padding:6px 16px;border-radius:7px;
+  cursor:pointer;transition:.18s}
+.mstat-tab:hover{color:var(--text-1)}
+.mstat-tab.on{background:var(--grad);color:#fff;font-weight:600}
+/* 网格卡片 */
+.market-body{flex:1;min-height:0;overflow-y:auto;padding:16px 20px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:14px;align-content:start}
+.market-empty{color:var(--text-3);font-size:13px;text-align:center;padding:56px 0;grid-column:1/-1}
+.mkt-card{display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:16px;transition:border-color .2s,transform .18s;min-width:0}
+.mkt-card:hover{border-color:rgba(167,139,250,.4);transform:translateY(-1px)}
+.mkt-card .mkt-top{display:flex;align-items:center;gap:12px;min-width:0}
+.mkt-icon{width:46px;height:46px;border-radius:12px;background:var(--grad);color:#fff;font-weight:800;font-size:19px;
+  display:grid;place-items:center;flex:none;overflow:hidden}
+.mkt-icon img{width:100%;height:100%;object-fit:cover}
+.mkt-info{flex:1;min-width:0}
+.mkt-info b{display:block;font-size:14px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkt-info .mkt-meta{font-size:11px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkt-card .mkt-desc{font-size:12px;color:var(--text-2);line-height:1.55;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.6em}
+.mkt-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mkt-actions .mkt-badge{margin-right:auto}
+.mkt-btn{padding:6px 14px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);
+  color:var(--text-1);font-size:12px;cursor:pointer;transition:.18s;white-space:nowrap}
+.mkt-btn:hover{background:rgba(124,58,237,.2);border-color:rgba(167,139,250,.5);color:var(--accent-soft)}
+.mkt-btn.primary{background:var(--grad);border:none;color:#fff}
+.mkt-btn.primary:hover{filter:brightness(1.12)}
+.mkt-btn.danger{color:#fb7185;border-color:rgba(244,63,94,.4)}
+.mkt-btn.danger:hover{background:rgba(244,63,94,.15)}
+.mkt-btn:disabled{opacity:.45;cursor:default}
+.mkt-badge{font-size:11px;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.mkt-badge.pub{color:#6ee7b7;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3)}
+.mkt-badge.priv{color:var(--text-3);background:rgba(255,255,255,.05);border:1px solid var(--border)}
+.mkt-badge.inst{color:var(--accent-soft);background:rgba(124,58,237,.14);border:1px solid rgba(167,139,250,.4)}
+
+/* —— 通讯录视图（所有用户，只能查看与加好友，不能发消息） —— */
+.contacts-view{display:none;flex-direction:column;min-width:0;min-height:0;background:var(--bg-soft);flex:1}
+.contacts-head{padding:13px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;flex:none}
+.contacts-body{flex:1;display:flex;min-height:0}
+.c-list{flex:none;width:264px;border-right:1px solid var(--border);overflow:auto;padding:8px}
+@media(max-width:760px){.c-list{width:100%}}
+.c-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;transition:.18s;cursor:pointer}
+.c-item:hover,.c-item.on{background:var(--surface-2)}
+.c-item .ci-main{flex:1;min-width:0}
+.c-item .ci-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-item .ci-acc{font-size:11px;color:var(--text-3)}
+.add-btn{flex:none;font-size:11px;font-weight:600;color:#fff;background:var(--grad);border:none;border-radius:8px;padding:6px 12px;cursor:pointer;transition:.18s}
+.add-btn:hover{filter:brightness(1.12)}
+.add-btn.added{background:transparent;color:var(--text-3);border:1px solid var(--border);cursor:default}
+.add-btn.del{background:transparent;color:#fb7185;border:1px solid rgba(244,63,94,.35)}
+.add-btn.del:hover{background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.6);filter:none}
+.c-detail{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-2);font-size:13px;min-width:0;padding:24px}
+.c-detail .big-avatar{width:96px;height:96px;border-radius:24px;background:var(--grad);color:#fff;font-size:36px;font-weight:800;display:grid;place-items:center;overflow:hidden;box-shadow:0 10px 30px rgba(124,58,237,.4)}
+.c-detail .big-avatar img{width:100%;height:100%;object-fit:cover}
+.c-detail .d-name{font-size:18px;font-weight:700;color:var(--text)}
+.c-detail .d-tip{font-size:11px;color:var(--text-3)}
+/* P1：#16 全局搜索弹窗 / #19 存储占用 */
+.gsearch-btn{margin-left:2px;flex-shrink:0}
+.gsearch-modal{width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;padding:18px}
+.gsearch-input-wrap{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:0 10px;color:var(--text-3);margin-bottom:12px}
+.gsearch-input-wrap .input{border:none;background:transparent;flex:1;padding:8px 0}
+.gsearch-results{overflow-y:auto;min-height:80px;max-height:52vh}
+.gsearch-group{margin-bottom:12px}
+.gsearch-peer{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);padding:4px 2px 6px}
+.gsearch-peer .avatar{width:26px;height:26px;border-radius:9px}
+.gsearch-peer .gp-name{font-weight:600;color:var(--text)}
+.gsearch-peer .gp-acc{font-style:normal;color:var(--text-3);font-size:11px}
+.gsearch-item{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:6px;cursor:pointer;color:var(--text-2);font-size:12px;transition:border-color .15s,background .15s}
+.gsearch-item:hover{border-color:rgba(124,58,237,.55);background:rgba(124,58,237,.08)}
+.gsearch-item .gs-who{font-size:10px;color:var(--text-3)}
+.gsearch-item .gs-text{color:var(--text-2);word-break:break-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.gsearch-none{color:var(--text-3);font-size:12px;text-align:center;padding:20px 0}

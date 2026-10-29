@@ -46,7 +46,17 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 插件市场仓库（打包场景由主进程注入到数据目录）
-const SEVEN_ZIP = process.env.MAGICHUB_7Z || ""; // 7za.exe（用于插件包解压/打包）
+/** 自动定位 7za.exe：优先环境变量（打包场景由主进程注入），开发模式回退仓库内副本 */
+function resolveSevenZip() {
+  if (process.env.MAGICHUB_7Z) return process.env.MAGICHUB_7Z;
+  const candidates = [
+    join(__dirname, "..", "..", "tools", "7za.exe"),
+    join(__dirname, "..", "server-app", "7za.exe"),
+    join(__dirname, "..", "desktop", "7za.exe"),
+  ];
+  return candidates.find((p) => existsSync(p)) || "";
+}
+const SEVEN_ZIP = resolveSevenZip(); // 7za.exe（用于插件包解压/打包）
 const UPLOADS_DIR = join(DATA_DIR, "uploads");
 const MAX_BODY = 12 * 1024 * 1024; // 请求体上限 12MB（头像 + 图片/文件消息 base64）
 const TOKEN_TTL_MS = 7 * 24 * 3600 * 1000; // token 有效期 7 天
@@ -1273,7 +1283,8 @@ const httpServer = createServer(async (req, res) => {
       }
       const pack = await ensureArchive(id);
       if (!pack) {
-        return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "插件不存在" } });
+        const message = SEVEN_ZIP ? "插件安装包生成失败" : "服务器缺少解压工具（7za.exe），无法生成安装包";
+        return sendJson(res, 500, { ok: false, error: { code: "PACK_FAILED", message } });
       }
       const body = await readFile(pack);
       res.writeHead(200, {
@@ -1440,6 +1451,7 @@ httpServer.listen(PORT, () => {
   console.log(`  api       -> http://localhost:${PORT}/api/*`);
   console.log(`  websocket -> ws://localhost:${PORT}`);
   console.log(`  plugins   -> ${PLUGINS_ROOT}`);
+  console.log(`  7za       -> ${SEVEN_ZIP || "未找到（插件市场下载/上传将不可用）"}`);
   console.log(`  avatars   -> ${AVATARS_DIR}`);
   console.log(`  uploads   -> ${UPLOADS_DIR}（签名 URL 鉴权）`);
   console.log(`（前端页面由 apps/web 独立提供，本服务不托管页面）`);

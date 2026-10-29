@@ -89,14 +89,24 @@ node apps/web/scripts/serve.mjs
 
 ### 打包为 exe
 
-在各打包工程目录下执行（`$env:TMP` 建议指向非 C 盘临时目录避免 rename 冲突）：
+在各打包工程目录下执行：
 
 ```bash
-# 服务器（apps/server-app）
-npx electron-packager . MagicHub-Server --platform=win32 --arch=x64 --icon=..\..\brand\icon.ico --out=..\..\dist --overwrite --prune=true --asar --extraResource=..\..\apps\server --extraResource=..\..\plugins --extraResource=..\..\brand --extraResource=..\..\apps\server-app\7za.exe
-
 # 客户端（apps/desktop）
-npx electron-packager . MagicHub-Client --platform=win32 --arch=x64 --icon=..\..\brand\icon.ico --out=..\..\dist --overwrite --prune=true --asar --extraResource=..\..\apps\web --extraResource=..\..\brand --extraResource=..\..\apps\desktop\7za.exe
+npm run pack
+
+# 服务器（apps/server-app）
+npm run pack
+```
+
+两者都调用 `tools/pack.mjs`：自动带入 `7za.exe`（插件市场解压/打包依赖）、`brand` 图标和运行资源，并把临时目录放在仓库内（避免 C 盘 → 产物盘 rename 报 EPERM），不会再漏资源。
+
+也可以一次打包两端（在仓库根目录）：
+
+```bash
+node tools/pack.mjs            # 客户端 + 服务端
+node tools/pack.mjs client     # 只打包客户端
+node tools/pack.mjs server     # 只打包服务端
 ```
 
 产物：`dist\MagicHub-Server-win32-x64\MagicHub-Server.exe`、`dist\MagicHub-Client-win32-x64\MagicHub-Client.exe`。

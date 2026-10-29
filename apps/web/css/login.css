@@ -1,0 +1,100 @@
+/* ============================================================
+   MagicHub · login.css —— 登录页（login.html）页面专属样式
+   品牌区 / 服务器地址 / 登录注册卡片 / 验证码 / 验证结果弹窗
+   依赖 theme.css 中的设计 Token
+   ============================================================ */
+
+/* 页面专属：深紫星云背景 + 深色渐变蒙版（背景图直接使用用户素材，不改动） */
+body{background:url("../assets/cover-bg.jpg") center/cover no-repeat fixed,var(--bg)}
+/* 登录页窗口标题栏：桌面壳下可拖动 */
+.login-titlebar{position:fixed;top:0;left:0;right:0;z-index:30;background:rgba(10,10,14,.5);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.05);
+  padding:0 10px 0 16px}
+.login-titlebar .title{color:rgba(255,255,255,.6)}
+.login-titlebar .win-controls button{width:42px;height:46px;border-radius:0}
+.login-titlebar .win-controls button:hover{background:rgba(255,255,255,.1);color:var(--accent-soft)}
+.auth-page{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:86px 32px 40px}
+.auth-page::before{content:"";position:fixed;inset:0;z-index:0;
+  background:linear-gradient(100deg,rgba(10,10,10,.92) 0%,rgba(14,14,14,.72) 45%,rgba(16,12,30,.62) 72%,rgba(20,16,38,.82) 100%)}
+/* 左右分栏：左侧品牌区 + 右侧登录卡片，填满画面避免大面积留白 */
+.auth-layout{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;
+  gap:clamp(48px,6vw,96px);width:100%;max-width:1120px;flex-wrap:wrap}
+.auth-brand{flex:1 1 380px;max-width:520px;min-width:320px;color:var(--text-1)}
+.brand-logo{width:76px;height:76px;margin-bottom:22px;filter:drop-shadow(0 8px 28px rgba(124,58,237,.55))}
+.brand-logo svg{width:100%;height:100%;display:block}
+.brand-title{font-size:clamp(40px,5vw,54px);font-weight:800;letter-spacing:1px;margin:0 0 14px;
+  background:linear-gradient(100deg,#EDE9FE 0%,#C4B5FD 38%,#A78BFA 68%,#7C3AED 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.brand-slogan{font-size:17px;color:var(--text-2);margin:0 0 34px;letter-spacing:.5px}
+.brand-feats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:18px}
+.brand-feats li{display:flex;align-items:center;gap:14px;font-size:14.5px;color:var(--text-2)}
+.brand-feats svg{width:22px;height:22px;flex:none;color:var(--accent-soft);
+  filter:drop-shadow(0 0 10px rgba(167,139,250,.45))}
+.brand-foot{margin-top:44px;font-size:12px;color:var(--text-3);letter-spacing:1px}
+/* 服务器地址配置：放在品牌区底部，不占用登录表单 */
+.brand-server{margin-top:18px;max-width:340px}
+.brand-server label{display:block;font-size:12px;color:var(--text-3);margin-bottom:8px;letter-spacing:.5px}
+.server-row{display:flex;align-items:center;gap:10px;background:rgba(30,30,30,.66);
+  border:1px solid var(--border);border-radius:12px;padding:6px 12px;
+  transition:border-color .2s,box-shadow .2s}
+.server-row:focus-within{border-color:rgba(167,139,250,.55);box-shadow:0 0 0 3px rgba(124,58,237,.18)}
+.server-row svg{width:18px;height:18px;flex:none;color:var(--text-3)}
+.server-row .input{flex:1;min-width:0;background:none;border:none;box-shadow:none;padding:7px 0;font-size:13px;color:var(--text-1)}
+.server-row .input:focus{outline:none}
+.server-check{flex:none;padding:6px 14px;border-radius:9px;background:rgba(124,58,237,.16);
+  border:1px solid rgba(124,58,237,.45);color:var(--accent-soft);font-size:12px;cursor:pointer;
+  transition:background .2s}
+.server-check:hover{background:rgba(124,58,237,.28)}
+.server-check:disabled{opacity:.55;cursor:wait}
+.server-tip{font-size:11px;color:var(--text-3);margin-top:7px;line-height:1.5}
+/* 服务器验证结果弹窗 */
+.check-modal-mask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,10,10,.66);backdrop-filter:blur(6px)}
+.check-modal-mask[hidden]{display:none}
+.check-modal{width:min(400px,86vw);background:#252526;border:1px solid var(--border);border-radius:16px;
+  padding:26px 26px 20px;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.check-modal.ok{border-color:rgba(52,211,153,.4)}
+.check-modal.err{border-color:rgba(244,63,94,.4)}
+.check-title{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;color:var(--text-1);margin-bottom:10px}
+.check-title svg{width:22px;height:22px;flex:none}
+.check-modal.ok .check-title{color:#6ee7b7}
+.check-modal.err .check-title{color:#fda4af}
+.check-body{font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:18px;word-break:break-word}
+.check-close{width:100%;padding:10px;border-radius:10px;background:var(--grad);color:#fff;border:none;
+  font-size:14px;cursor:pointer}
+.check-close:hover{filter:brightness(1.1)}
+.auth-card-col{flex:0 0 420px}
+.auth-card{background:rgba(37,37,38,.78);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);
+  border-radius:20px;padding:34px 34px 30px;box-shadow:0 24px 70px rgba(0,0,0,.5)}
+.auth-card.wide{max-width:420px;width:100%}
+.card-title{margin:0 0 4px;font-size:24px;font-weight:700;color:var(--text-1)}
+.card-sub{margin:0 0 20px;font-size:13px;color:var(--text-3)}
+.reg-field{display:none;animation:regIn .25s ease both}
+@keyframes regIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.auth-card.reg .reg-field{display:block}
+.reg-row{display:flex;gap:12px;align-items:center}
+.avatar-pick{flex:none;width:64px;height:64px;border-radius:14px;overflow:hidden;position:relative;
+  background:var(--surface-2);border:1px dashed var(--border);cursor:pointer;display:grid;place-items:center}
+.avatar-pick img{width:100%;height:100%;object-fit:cover;display:none}
+.avatar-pick .ph{color:var(--text-3);font-size:20px;display:grid;place-items:center}
+.avatar-pick:hover{border-color:var(--primary-strong);background:rgba(124,58,237,.12)}
+.avatar-tip{font-size:11px;color:var(--text-3);line-height:1.5}
+.avatar-preview{width:64px;height:64px;border-radius:14px;object-fit:cover;display:none}
+#avatarInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+/* 注册算术验证码 */
+.captcha-row{display:flex;gap:10px;align-items:center}
+.captcha-q{flex:none;min-width:86px;text-align:center;padding:8px 12px;border-radius:10px;
+  background:rgba(124,58,237,.14);border:1px solid rgba(124,58,237,.4);color:var(--accent-soft);
+  font-size:14px;font-weight:700;letter-spacing:1px}
+.captcha-input{flex:1;min-width:0}
+.captcha-row .server-check{padding:8px 12px}
+.last-login{margin-top:2px;padding:8px 12px;border-radius:10px;background:rgba(124,58,237,.12);
+  border:1px solid rgba(124,58,237,.32);color:var(--text-2);font-size:12px}
+.last-login b{color:var(--accent-soft)}
+/* 窄屏：隐藏品牌区，仅居中登录卡片 */
+@media (max-width:900px){
+  .auth-page{padding:24px 16px}
+  .login-titlebar{display:none}
+  .auth-brand{display:none}
+  .auth-card-col{flex-basis:100%;max-width:420px}
+}

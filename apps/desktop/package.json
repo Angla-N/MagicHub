@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-packager . MagicHub-Client --platform=win32 --arch=x64 --icon=../../brand/icon.ico --out=../../dist --overwrite --ignore=\"^\\.vscode\" --prune=true --asar --extraResource=../../apps/web"
+    "pack": "node ../../tools/pack.mjs client"
   },
   "devDependencies": {
     "electron": "^33.0.0",
