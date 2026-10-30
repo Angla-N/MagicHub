@@ -26,12 +26,13 @@ const jobs = {
   client: {
     appDir: join(root, "apps", "desktop"),
     name: "MagicHub-Client",
-    resources: ["apps/web", "brand", "tools/7za.exe"],
+    // 7za.exe 必须是 basename 直达（resources/7za.exe），与 main.js 的 process.resourcesPath/7za.exe 一致
+    resources: ["apps/web", "brand", "apps/server-app/7za.exe"],
   },
   server: {
     appDir: join(root, "apps", "server-app"),
     name: "MagicHub-Server",
-    resources: ["apps/server", "plugins", "brand", "tools/7za.exe"],
+    resources: ["apps/server", "plugins", "brand", "apps/server-app/7za.exe"],
   },
 };
 

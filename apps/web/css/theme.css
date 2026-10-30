@@ -10,8 +10,8 @@
   --bg:#1E1E1E; --bg-soft:#181818; --surface:#252526; --surface-2:#2A2D2E;
   --border:#3C3C3C;
   /* 点睛色（深紫） */
-  --primary:#5B21B6; --primary-strong:#6D28D9; --accent:#7C3AED; --accent-soft:#A78BFA;
-  --grad:linear-gradient(135deg,#5B21B6 0%,#7C3AED 100%);
+  --primary:#7C3AED; --primary-strong:#8B5CF6; --accent:#A855F7; --accent-soft:#C4B5FD;
+  --grad:linear-gradient(135deg,#7C3AED 0%,#A855F7 100%);
   /* 文本 */
   --text:#E8E8E8; --text-2:#9D9D9D; --text-3:#6E6E6E;
   /* 状态色 */
@@ -219,8 +219,8 @@ footer .p{margin-left:auto;color:var(--accent-soft)}
 *::-webkit-scrollbar{width:10px;height:10px}
 *::-webkit-scrollbar-track{background:transparent}
 *::-webkit-scrollbar-thumb{
-  background:rgba(255,255,255,.14);border-radius:99px;
-  border:3px solid transparent;background-clip:padding-box; /* 内边距让滑块更纤细 */
+  background:rgba(255,255,255,.32);border-radius:99px;
+  border:2px solid transparent;background-clip:padding-box; /* 内边距让滑块更纤细 */
 }
 *::-webkit-scrollbar-thumb:hover{background:var(--primary,#7C3AED)}
 *::-webkit-scrollbar-thumb:active{background:var(--accent,#A855F7)}
