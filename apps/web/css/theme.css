@@ -31,6 +31,11 @@ body{
   background:var(--bg); color:var(--text); line-height:1.6;
   min-width:320px; overflow-x:hidden;
 }
+/* 深黑底 + 极淡深紫氛围光（不掺其他颜色；登录页星云背景之上自然叠加） */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(1100px 640px at 8% -6%,rgba(124,58,237,.13),transparent 58%),
+    radial-gradient(880px 560px at 106% 116%,rgba(168,85,247,.09),transparent 55%)}
 ::selection{background:rgba(124,58,237,.4);color:#fff}
 a{color:var(--accent-soft);text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
@@ -61,7 +66,8 @@ svg{display:block}
 
 /* 窗口标题栏（Electron 桌面壳 / 演示通用） */
 .titlebar{height:46px;display:flex;align-items:center;gap:10px;padding:0 10px 0 16px;
-  background:var(--surface);border-bottom:1px solid var(--border);
+  background:rgba(23,23,26,.72);backdrop-filter:blur(14px) saturate(1.15);-webkit-backdrop-filter:blur(14px) saturate(1.15);
+  border-bottom:1px solid rgba(255,255,255,.06);
   -webkit-app-region:drag;user-select:none;flex:none}
 .titlebar .logo{font-size:14px;font-weight:800}
 .titlebar .logo-badge{width:24px;height:24px;border-radius:7px;font-size:12px}
@@ -157,7 +163,7 @@ section{padding:64px 0 8px}
 .toast.ok{border-left-color:var(--ok)}
 
 /* 悬浮轻提示 */
-#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(24px);background:var(--surface-2);border:1px solid var(--primary-strong);color:var(--text);font-size:13px;padding:11px 20px;border-radius:12px;box-shadow:var(--shadow);opacity:0;transition:.3s;pointer-events:none;z-index:99}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(24px);background:rgba(42,45,46,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(167,139,250,.35);color:var(--text);font-size:13px;padding:11px 20px;border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.5),0 0 40px rgba(124,58,237,.10);opacity:0;transition:.3s;pointer-events:none;z-index:99}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* 标签页 */
@@ -165,8 +171,8 @@ section{padding:64px 0 8px}
 .tab{flex:1;text-align:center;font-size:12px;color:var(--text-3);padding:7px 6px;border-radius:8px;transition:.18s;cursor:pointer}
 .tab.on{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 4px 12px rgba(124,58,237,.35)}
 
-/* 弹窗 */
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow);max-width:320px}
+/* 弹窗（全局搜索 / 密码 / 资料等通用层） */
+.modal{background:rgba(42,45,46,.9);backdrop-filter:blur(22px) saturate(1.15);-webkit-backdrop-filter:blur(22px) saturate(1.15);border:1px solid rgba(167,139,250,.22);border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.55),0 0 50px rgba(124,58,237,.08);max-width:320px}
 .modal h6{font-size:14px;font-weight:700;margin-bottom:8px}
 .modal p{font-size:12px;color:var(--text-2);margin-bottom:16px}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px}
