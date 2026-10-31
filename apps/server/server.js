@@ -46,6 +46,8 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const PLUGINS_ROOT = process.env.MAGICHUB_PLUGINS_ROOT || join(__dirname, "..", "..", "plugins"); // 插件市场仓库（打包场景由主进程注入到数据目录）
+/** 前端脚本发布目录（客户端实时更新拉取）：由 node tools/pack.mjs server 生成，可用 MAGICHUB_WEB_DIR 覆盖 */
+const WEB_DIR = process.env.MAGICHUB_WEB_DIR || join(__dirname, "..", "..", "release", "web");
 /** 自动定位 7za.exe：优先环境变量（打包场景由主进程注入），开发模式回退仓库内副本 */
 function resolveSevenZip() {
   if (process.env.MAGICHUB_7Z) return process.env.MAGICHUB_7Z;
@@ -1240,6 +1242,28 @@ const httpServer = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, data: { service: "magichub-server", uptime: Math.round(process.uptime()) } });
     }
 
+    // ---- 前端脚本分发：GET /api/web/manifest（客户端启动时比对版本，增量拉取）----
+    if (urlPath === "/api/web/manifest") {
+      const mf = join(WEB_DIR, "web-manifest.json");
+      if (!existsSync(mf)) {
+        return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "服务器未发布前端脚本（请先执行 node tools/pack.mjs server）" } });
+      }
+      try {
+        const m = JSON.parse(readFileSync(mf, "utf8"));
+        return sendJson(res, 200, { ok: true, data: { version: m.version, generatedAt: m.generatedAt, entry: m.entry, files: m.files || [] } });
+      } catch {
+        return sendJson(res, 500, { ok: false, error: { code: "INTERNAL", message: "前端清单损坏" } });
+      }
+    }
+    // ---- 前端脚本分发：GET /api/web/file/<path>（按清单逐文件下载，sha256 客户端校验）----
+    if (urlPath.startsWith("/api/web/file/")) {
+      const file = resolveInRoot(WEB_DIR, urlPath.slice("/api/web/file/".length));
+      if (!file || !existsSync(file) || !statSync(file).isFile()) {
+        return sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "文件不存在" } });
+      }
+      return await serveStatic(res, file);
+    }
+
     // ---- 服务器存储统计：GET /api/server/stats（需登录，设置页"存储占用"）----
     if (urlPath === "/api/server/stats") {
       const username = resolveToken(req);
@@ -1451,6 +1475,7 @@ httpServer.listen(PORT, () => {
   console.log(`  api       -> http://localhost:${PORT}/api/*`);
   console.log(`  websocket -> ws://localhost:${PORT}`);
   console.log(`  plugins   -> ${PLUGINS_ROOT}`);
+  console.log(`  web 分发  -> ${WEB_DIR}（/api/web/manifest + /api/web/file/*，客户端实时更新前端）`);
   console.log(`  7za       -> ${SEVEN_ZIP || "未找到（插件市场下载/上传将不可用）"}`);
   console.log(`  avatars   -> ${AVATARS_DIR}`);
   console.log(`  uploads   -> ${UPLOADS_DIR}（签名 URL 鉴权）`);

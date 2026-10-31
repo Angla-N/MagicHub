@@ -13,6 +13,7 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, net, Notification } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { createHash } = require("node:crypto");
 const { execFile } = require("node:child_process");
 
 app.setName("MagicHub");
@@ -30,6 +31,14 @@ const legacySettingsFile = path.join(app.getPath("userData"), "settings.json");
 const sevenZip = app.isPackaged
   ? path.join(process.resourcesPath, "7za.exe")
   : path.join(__dirname, "7za.exe");
+
+/* ---- 前端脚本缓存（实时更新架构）：打包模式不内置前端，从服务器拉取缓存到 exe 旁 data/web ---- */
+const webCacheDir = app.isPackaged ? path.join(localDataDir, "web") : null;
+const DEFAULT_SERVER_BASE = "http://localhost:3000";
+function readServerBase() {
+  const s = readSettings();
+  return String(s.serverBase || DEFAULT_SERVER_BASE).replace(/\/+$/, "");
+}
 
 /* ---- 设置读写（后台驻留开关；P2：#25 首次启动把旧的 C 盘设置迁移到 exe 旁） ---- */
 function readSettings() {
@@ -55,6 +64,115 @@ function writeSettings(patch) {
 function keepInBackground() {
   const s = readSettings();
   return s.keepInBackground !== false; // 默认开启后台驻留
+}
+
+/* ================= 前端脚本同步（打包模式）：服务器发布 → 本地缓存 → 加载 ================= */
+
+/** 安全地把清单相对路径解析为缓存目录内路径（防穿越：拒绝 .. / . 段与绝对路径） */
+function resolveCachePath(baseRoot, rel) {
+  const parts = String(rel || "").split("/").filter(Boolean);
+  if (!parts.length) return null;
+  for (const p of parts) if (p === ".." || p === ".") return null;
+  const cur = path.resolve(baseRoot, ...parts);
+  if (cur !== baseRoot && !cur.startsWith(baseRoot + path.sep)) return null;
+  return cur;
+}
+
+function localManifestFile() { return path.join(webCacheDir, "web-manifest.json"); }
+function readLocalManifest() {
+  try {
+    const m = JSON.parse(fs.readFileSync(localManifestFile(), "utf8"));
+    if (m && typeof m.version === "number" && Array.isArray(m.files)) return m;
+  } catch { /* 无缓存或损坏 */ }
+  return null;
+}
+function writeLocalManifest(m) {
+  try {
+    fs.mkdirSync(webCacheDir, { recursive: true });
+    const tmp = localManifestFile() + ".tmp-" + Date.now();
+    fs.writeFileSync(tmp, JSON.stringify(m, null, 2));
+    fs.renameSync(tmp, localManifestFile());
+  } catch (err) {
+    console.error("[magichub-client] 写本地前端清单失败:", err.message);
+  }
+}
+function fileMatch(list, f) {
+  return list.some((x) => x.path === f.path && x.sha256 === f.sha256);
+}
+
+/**
+ * 确保本地前端为服务器最新版本（增量同步，sha256 校验）。
+ * 返回 { entry, version, offline }；服务器不可达且无本地缓存时返回 null（引导页配置重试）。
+ */
+async function ensureWeb(onStatus) {
+  const base = readServerBase();
+  const st = (m) => { if (onStatus) onStatus(m); };
+
+  // 1. 拉取服务器前端清单
+  let manifest = null;
+  try {
+    const r = await fetch(base + "/api/web/manifest", { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && j.ok && j.data && j.data.version) manifest = j.data;
+    }
+  } catch { manifest = null; }
+
+  const local = readLocalManifest();
+
+  // 2. 服务器不可达：有本地缓存则离线启动；否则返回 null（引导页）
+  if (!manifest) {
+    if (local) {
+      st("服务器不可达，使用本地缓存（v" + local.version + "）");
+      return { entry: local.entry || "login.html", version: local.version, offline: true };
+    }
+    st("无法获取前端：请确认服务器已启动");
+    return null;
+  }
+
+  // 3. 版本一致且文件齐全 → 直接用本地缓存（第二次及以后启动，秒开）
+  if (local && local.version === manifest.version && (manifest.files || []).every((f) => fileMatch(local.files, f))) {
+    st("前端已是最新（v" + manifest.version + "）");
+    return { entry: manifest.entry || "login.html", version: manifest.version, offline: false };
+  }
+
+  // 4. 增量下载缺失/变化的文件（版本不同或首次）
+  const need = (manifest.files || []).filter((f) => !(local && fileMatch(local.files, f)));
+  st("正在同步前端 v" + manifest.version + "…（" + need.length + " 个文件）");
+  fs.mkdirSync(webCacheDir, { recursive: true });
+  let okAll = true;
+  for (let i = 0; i < need.length; i++) {
+    const f = need[i];
+    try {
+      const enc = f.path.split("/").map(encodeURIComponent).join("/");
+      const r = await fetch(base + "/api/web/file/" + enc, { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const buf = Buffer.from(await r.arrayBuffer());
+      const hash = createHash("sha256").update(buf).digest("hex");
+      if (hash !== f.sha256) throw new Error("sha256 校验失败");
+      const dest = resolveCachePath(webCacheDir, f.path);
+      if (!dest) throw new Error("路径不合法");
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      const tmp = dest + ".tmp-" + Date.now();
+      fs.writeFileSync(tmp, buf);
+      fs.renameSync(tmp, dest);
+      if (i % 10 === 0 || i === need.length - 1) {
+        st("正在同步前端 v" + manifest.version + "…（" + (i + 1) + "/" + need.length + "）");
+      }
+    } catch (e) {
+      console.error("[magichub-client] 文件同步失败 " + f.path + ":", e.message);
+      // 该文件本地有旧版则容忍继续；没有旧版则整体失败（引导页重试）
+      if (!(local && fileMatch(local.files, f))) { okAll = false; break; }
+    }
+  }
+  if (!okAll) {
+    st("同步失败：请确认服务器在线后重试");
+    return null;
+  }
+
+  writeLocalManifest(manifest);
+  st("前端同步完成（v" + manifest.version + "）");
+  return { entry: manifest.entry || "login.html", version: manifest.version, offline: false };
 }
 
 /* ---- 本地插件 ---- */
@@ -203,10 +321,13 @@ function createWindow() {
 
   win.once("ready-to-show", () => win.show());
   // 打开程序默认停在登录页（用户确认登录后才进入主界面）
-  const webEntry = app.isPackaged
-    ? path.join(process.resourcesPath, "web", "login.html")
-    : path.join(__dirname, "..", "..", "web", "login.html");
-  win.loadFile(webEntry);
+  if (!app.isPackaged) {
+    // 开发模式：直接加载仓库前端
+    win.loadFile(path.join(__dirname, "..", "..", "web", "login.html"));
+    return;
+  }
+  // 打包模式：先加载内置引导页（同步前端/进度/错误配置），同步完成后切入缓存前端
+  win.loadFile(path.join(process.resourcesPath, "boot.html")).then(() => runWebSync());
 
   // 关闭窗口：后台驻留开启时隐藏到托盘，否则真正退出
   win.on("close", (e) => {
@@ -245,6 +366,33 @@ ipcMain.handle("win:maximize", () => {
   else win.maximize();
 });
 ipcMain.handle("win:close", () => win && win.close());
+
+/* 引导页：前端同步状态 / 服务器地址配置（打包模式启动时） */
+let syncing = false;
+async function runWebSync() {
+  if (syncing) return;
+  syncing = true;
+  const st = (m) => { if (win && !win.isDestroyed()) win.webContents.send("boot:status", String(m)); };
+  try {
+    const target = await ensureWeb(st);
+    if (!target) { st("无法获取前端：请确认服务器已启动"); return; }
+    if (win && !win.isDestroyed()) {
+      await win.loadFile(path.join(webCacheDir, target.entry));
+    }
+  } catch (e) {
+    st("同步失败：" + e.message);
+  } finally {
+    syncing = false;
+  }
+}
+ipcMain.handle("boot:getServerBase", () => readServerBase());
+ipcMain.handle("boot:setServerBase", (_e, base) => {
+  const b = String(base || "").trim().replace(/\/+$/, "");
+  if (!/^https?:\/\/[\w.-]+(:\d+)?$/.test(b)) return false;
+  writeSettings({ serverBase: b });
+  return true;
+});
+ipcMain.handle("boot:retry", () => { runWebSync(); return true; });
 
 /* 系统通知：后台驻留 / 窗口最小化时新消息桌面弹出（P1） */
 ipcMain.handle("app:notify", (_e, title, body) => {

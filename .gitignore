@@ -8,6 +8,8 @@ node_modules/
 dist/
 out/
 build/
+# 前端发布包（由 node tools/pack.mjs server 生成）
+release/
 *.tsbuildinfo
 
 # —— 运行时数据（启动时自动重建，含演示账号）——

@@ -25,4 +25,11 @@ contextBridge.exposeInMainWorld("magicHub", {
   uninstallPlugin: (id) => ipcRenderer.invoke("plugins:uninstall", id),
   /* P2：#24 插件启用/禁用 */
   setPluginEnabled: (id, enabled) => ipcRenderer.invoke("plugins:setEnabled", id, !!enabled),
+  /* 引导页（前端脚本同步 / 服务器地址配置） */
+  boot: {
+    getServerBase: () => ipcRenderer.invoke("boot:getServerBase"),
+    setServerBase: (base) => ipcRenderer.invoke("boot:setServerBase", base),
+    retry: () => ipcRenderer.invoke("boot:retry"),
+    onStatus: (cb) => ipcRenderer.on("boot:status", (_e, s) => { if (cb) cb(String(s)); }),
+  },
 });
